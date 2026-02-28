@@ -1,8 +1,9 @@
 """Task queue for managing subtask execution."""
 import subprocess
 import os
+import signal
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 from dataclasses import dataclass
 from utils.logger import get_logger
 
@@ -15,6 +16,7 @@ class TaskResult:
     output: str
     error: Optional[str] = None
     session_id: Optional[str] = None
+    process: Optional[Any] = None
 
 
 class TaskQueue:
@@ -34,22 +36,112 @@ class TaskQueue:
         self,
         subtask_id: str,
         worktree_path: str,
-        command: str,
-        session_id: str
-    ) -> TaskResult:
-        """Start a task in a worktree."""
+        prompt: str,
+        timeout: int = 300
+    ) -> Tuple[TaskResult, subprocess.Popen]:
+        """
+        Start a task in a worktree using OpenCode.
+        
+        Returns:
+            Tuple of (TaskResult, subprocess.Popen)
+        """
+        self.logger.info(f"Starting task {subtask_id} in {worktree_path}")
+        
+        # Build command
+        cmd = [
+            "opencode",
+            "run",
+            "--print-logs",
+            prompt
+        ]
+        
+        # Start process in background with PTY
+        process = subprocess.Popen(
+            cmd,
+            cwd=worktree_path,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            preexec_fn=os.setsid  # Create new process group
+        )
+        
         result = TaskResult(
             subtask_id=subtask_id,
             status="running",
             output=f"Started in {worktree_path}",
-            session_id=session_id
+            session_id=None,
+            process=process
         )
         self.running_tasks[subtask_id] = result
-        self.logger.info(f"Started task {subtask_id} in {worktree_path}")
+        
+        self.logger.info(f"Started task {subtask_id} with PID {process.pid}")
+        return result, process
+    
+    def check_task(self, subtask_id: str) -> Optional[TaskResult]:
+        """Check if a task is still running or completed."""
+        if subtask_id not in self.running_tasks:
+            return None
+        
+        result = self.running_tasks[subtask_id]
+        process = result.process
+        
+        if process is None:
+            return result
+        
+        # Check if process is done
+        returncode = process.poll()
+        if returncode is not None:
+            # Process finished
+            stdout, stderr = process.communicate()
+            output = stdout + stderr
+            
+            if returncode == 0:
+                result.status = "completed"
+            else:
+                result.status = "failed"
+                result.error = f"Exit code: {returncode}"
+            
+            result.output = output
+            
+            # Move to completed
+            self.completed_tasks[subtask_id] = result
+            del self.running_tasks[subtask_id]
+            
+            self.logger.info(f"Task {subtask_id} {result.status}")
+        
         return result
     
+    def wait_all(self, check_interval: int = 5) -> Dict[str, TaskResult]:
+        """Wait for all running tasks to complete."""
+        while self.running_tasks:
+            subtask_ids = list(self.running_tasks.keys())
+            for subtask_id in subtask_ids:
+                self.check_task(subtask_id)
+            
+            if self.running_tasks:
+                import time
+                time.sleep(check_interval)
+        
+        return self.completed_tasks
+    
+    def cancel_task(self, subtask_id: str):
+        """Cancel a running task."""
+        if subtask_id in self.running_tasks:
+            result = self.running_tasks[subtask_id]
+            if result.process:
+                try:
+                    # Kill process group
+                    os.killpg(os.getpgid(result.process.pid), signal.SIGTERM)
+                except:
+                    pass
+            
+            result.status = "cancelled"
+            self.completed_tasks[subtask_id] = result
+            del self.running_tasks[subtask_id]
+            self.logger.info(f"Task {subtask_id} cancelled")
+    
     def complete_task(self, subtask_id: str, status: str, output: str, error: Optional[str] = None):
-        """Mark a task as completed."""
+        """Mark a task as completed (manual)."""
         if subtask_id in self.running_tasks:
             result = self.running_tasks.pop(subtask_id)
             result.status = status
