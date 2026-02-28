@@ -15,10 +15,13 @@ class CoderAgent:
     - Report status back to initiator
     
     Skills:
-    - Claude Code / OpenCode
+    - OpenCode (primary)
+    - Claude Code (fallback)
     - Git operations
     - Test frameworks
     """
+    
+    OPENCODE_PATH = "opencode"
     
     def __init__(self, agent_id: str, config: Optional[Dict[str, Any]] = None):
         self.agent_id = agent_id
@@ -34,7 +37,7 @@ class CoderAgent:
     
     def execute_subtask(self, subtask: Dict[str, Any], repo_path: str) -> Dict[str, Any]:
         """
-        Execute a single subtask.
+        Execute a single subtask using OpenCode.
         
         Returns:
             Dict with status, output, and any error info
@@ -45,18 +48,101 @@ class CoderAgent:
         
         self.logger.info(f"Executing subtask {subtask_id}: {description}")
         
-        # TODO: Connect to Claude Code / OpenCode for actual implementation
-        # For Phase 1, this is a stub
+        # Build prompt for OpenCode
+        prompt = self._build_prompt(subtask)
         
-        result = {
-            "subtask_id": subtask_id,
-            "status": "completed",
-            "output": f"Stub: Would execute '{description}'",
-            "error": None
-        }
+        # Execute using OpenCode
+        result = self._run_opencode(prompt, repo_path)
         
-        self.logger.info(f"Subtask {subtask_id} {result['status']}")
+        self.logger.info(f"Subtask {subtask_id} result: {result['status']}")
         return result
+    
+    def _build_prompt(self, subtask: Dict[str, Any]) -> str:
+        """Build the prompt for the coding agent."""
+        description = subtask.get("description", "")
+        file_path = subtask.get("file", "")
+        
+        prompt = description
+        
+        # Add file-specific instructions
+        if file_path:
+            if "test" in file_path.lower():
+                prompt += f"\nWrite comprehensive unit tests in {file_path}."
+            else:
+                prompt += f"\nImplement the code in {file_path}."
+        
+        prompt += "\nCommit your changes with a descriptive message."
+        
+        return prompt
+    
+    def _run_opencode(self, prompt: str, repo_path: str, timeout: int = 300) -> Dict[str, Any]:
+        """
+        Run OpenCode to execute the task.
+        
+        Args:
+            prompt: Task description
+            repo_path: Path to the repository
+            timeout: Timeout in seconds
+            
+        Returns:
+            Dict with status, output, error
+        """
+        self.logger.info(f"Running OpenCode in {repo_path}")
+        
+        try:
+            # Use opencode run with the prompt
+            cmd = [
+                self.OPENCODE_PATH,
+                "run",
+                "--print-logs",  # Enable logging output
+                prompt
+            ]
+            
+            result = subprocess.run(
+                cmd,
+                cwd=repo_path,
+                capture_output=True,
+                text=True,
+                timeout=timeout
+            )
+            
+            # Check if it succeeded
+            if result.returncode == 0:
+                return {
+                    "subtask_id": self.current_subtask.get("id") if self.current_subtask else "unknown",
+                    "status": "completed",
+                    "output": result.stdout + result.stderr,
+                    "error": None
+                }
+            else:
+                return {
+                    "subtask_id": self.current_subtask.get("id") if self.current_subtask else "unknown",
+                    "status": "failed",
+                    "output": result.stdout + result.stderr,
+                    "error": f"Exit code: {result.returncode}"
+                }
+                
+        except subprocess.TimeoutExpired:
+            return {
+                "subtask_id": self.current_subtask.get("id") if self.current_subtask else "unknown",
+                "status": "failed",
+                "output": "",
+                "error": "Timeout"
+            }
+        except FileNotFoundError:
+            return {
+                "subtask_id": self.current_subtask.get("id") if self.current_subtask else "unknown",
+                "status": "failed",
+                "output": "",
+                "error": "OpenCode not found"
+            }
+        except Exception as e:
+            return {
+                "subtask_id": self.current_subtask.get("id") if self.current_subtask else "unknown",
+                "status": "failed",
+                "output": "",
+                "error": str(e)
+            }
     
     def write_code(self, file_path: str, content: str, branch: str) -> bool:
         """Write code to a file in the repository."""
@@ -67,7 +153,6 @@ class CoderAgent:
             sha = None
             try:
                 existing = self.github_client.get_file_content(file_path, ref=branch)
-                # Would need to get SHA from response
             except:
                 pass
             
@@ -76,7 +161,8 @@ class CoderAgent:
                 path=file_path,
                 content=content,
                 message=f"Update {file_path}",
-                branch=branch
+                branch=branch,
+                sha=sha
             )
             
             return True
@@ -162,6 +248,11 @@ class CoderAgent:
     
     def fix_errors(self, error_output: str) -> bool:
         """Attempt to fix errors based on test output."""
-        # TODO: Use Claude Code to analyze errors and fix
-        self.logger.info("Attempting to fix errors...")
-        return False
+        # Use OpenCode to analyze and fix
+        if not self.current_subtask:
+            return False
+        
+        prompt = f"Fix the following errors in the code:\n{error_output}"
+        result = self._run_opencode(prompt, os.path.dirname(self.current_subtask.get("file", ".")))
+        
+        return result["status"] == "completed"
