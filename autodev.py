@@ -3,10 +3,12 @@
 
 Usage:
     python autodev.py --repo owner/repo --issue 123
+    python autodev.py --repo owner/repo --issue 123 --run-orchestrator --local-repo /path/to/repo
     python autodev.py --resume subtask_plan.json
 """
 import argparse
 import sys
+import os
 from pathlib import Path
 
 # Add parent to path for imports
@@ -15,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from config.loader import load_config
 from core.github_client import GitHubClient
 from core.state_manager import StateManager
+from core.orchestrator import AutoDevOrchestrator
 from agents.initiator.agent import InitiatorAgent
 from utils.logger import setup_logger
 
@@ -60,6 +63,17 @@ def parse_args():
     parser.add_argument(
         "--log-file",
         help="Path to log file"
+    )
+    
+    parser.add_argument(
+        "--run-orchestrator", "-o",
+        action="store_true",
+        help="Run full orchestrator (requires --local-repo)"
+    )
+    
+    parser.add_argument(
+        "--local-repo",
+        help="Local path to the repository (required for orchestrator)"
     )
     
     return parser.parse_args()
@@ -111,7 +125,35 @@ def main():
     initiator.initialize(github, state_manager)
     
     # Main execution
-    if args.resume:
+    if args.run_orchestrator:
+        # Run full orchestrator
+        if not args.local_repo:
+            logger.error("--local-repo required for orchestrator mode")
+            sys.exit(1)
+        
+        if not args.repo or not args.issue:
+            logger.error("--repo and --issue required for orchestrator mode")
+            sys.exit(1)
+        
+        if not token:
+            logger.error("GitHub token required for orchestrator. Set --token or GITHUB_TOKEN")
+            sys.exit(1)
+        
+        logger.info(f"Running orchestrator for {owner}/{repo_name} issue #{args.issue}")
+        
+        orchestrator = AutoDevOrchestrator(config)
+        orchestrator.initialize(token, owner, repo_name, args.local_repo)
+        
+        try:
+            result = orchestrator.run_issue(args.issue)
+            logger.info(f"Orchestrator result: {result['status']}")
+            
+            if result.get("pr"):
+                logger.info(f"PR created: {result['pr']['html_url']}")
+        finally:
+            orchestrator.cleanup()
+    
+    elif args.resume:
         # Resume from existing plan
         logger.info(f"Resuming from {args.resume}")
         try:
