@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 # Agent type choices
 AGENT_CHOICES = ['opencode', 'claude-code']
-DEFAULT_AGENT = 'opencode'
+DEFAULT_AGENT = 'claude-code'
 
 
 @dataclass

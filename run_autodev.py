@@ -29,7 +29,8 @@ def run_autodev(
     local_repo_path: str,
     max_agents: int = 4,
     agent_type: str = "opencode",
-    use_claude_skip_permissions: bool = False
+    use_claude_skip_permissions: bool = False,
+    upstream_repo: str = None
 ):
     """Run AutoDev end-to-end on a GitHub issue."""
     logger = setup_logger()
@@ -37,23 +38,33 @@ def run_autodev(
     logger.info(f"   Agent: {agent_type} | Max Agents: {max_agents}")
     logger.info("=" * 60)
     
+    # Determine which repo to fetch issue from (upstream or local)
+    if upstream_repo:
+        upstream_owner, upstream_name = upstream_repo.split("/")
+        logger.info(f"   Upstream: {upstream_repo}")
+    else:
+        upstream_owner, upstream_name = repo_owner, repo_name
+    
     # Initialize agent config
     agent_config = AgentConfig(
         agent_type=agent_type,
-        skip_permissions=use_claude_skip_permissions
+        skip_permissions=(agent_type == 'claude-code')  # Auto-skip for Claude Code
     )
     logger.info(f"   Using {agent_type} for code generation")
     
     # Initialize components
     github = GitHubClient(token=github_token, owner=repo_owner, repo=repo_name)
+    upstream_github = GitHubClient(token=github_token, owner=upstream_owner, repo=upstream_name)
     session_history = SessionHistory()
-    agent_memory = AgentMemory(session_id=session_history.session_id)
+    # Get session_id from state after initialization
+    session_history.init_session(issue=f"#{issue_number}", total_subtasks=1)
+    agent_memory = AgentMemory(session_id=session_history.state["session_id"])
     pr_manager = PRManager(github)
     researcher = ResearcherAgent()
     
-    # Step 1: Fetch issue
+    # Step 1: Fetch issue from upstream repo
     logger.info("📥 Step 1: Fetching issue from GitHub...")
-    issue = github.get_issue(issue_number)
+    issue = upstream_github.get_issue(issue_number)
     logger.info(f"   Title: {issue['title']}")
     logger.info(f"   Labels: {issue.get('labels', [])}")
     logger.info(f"   URL: {issue['html_url']}")
@@ -63,10 +74,8 @@ def run_autodev(
     logger.info("📋 Step 2: Decomposing issue into tasks...")
     decomposer = TaskDecomposer()
     plan = decomposer.decompose_issue(issue)
-    state_manager.current_plan = plan
-    state_manager.save()
     
-    # Initialize session
+    # Initialize session with subtask count
     session_history.init_session(
         issue=f"#{issue_number}: {issue['title']}",
         total_subtasks=plan['metadata']['total_subtasks']
@@ -174,13 +183,17 @@ def main():
     parser.add_argument(
         "--agent-type", 
         choices=['opencode', 'claude-code'], 
-        default='opencode',
+        default='claude-code',
         help="Agent to use for code generation (opencode or claude-code)"
     )
     parser.add_argument(
         "--claude-skip-permissions",
         action="store_true",
         help="Use --dangerously-skip-permissions for Claude Code (auto-approve edits)"
+    )
+    parser.add_argument(
+        "--upstream-repo",
+        help="Upstream repo to fetch issue from (format: owner/repo). Use when working on a fork."
     )
     
     args = parser.parse_args()
@@ -203,7 +216,8 @@ def main():
         local_repo_path=args.local_repo,
         max_agents=args.agents,
         agent_type=args.agent_type,
-        use_claude_skip_permissions=args.claude_skip_permissions
+        use_claude_skip_permissions=args.claude_skip_permissions,
+        upstream_repo=args.upstream_repo
     )
     
     print(f"\n✅ AutoDev Complete!")
