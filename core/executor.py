@@ -133,7 +133,7 @@ class TaskQueue:
                 try:
                     # Kill process group
                     os.killpg(os.getpgid(result.process.pid), signal.SIGTERM)
-                except:
+                except Exception:
                     pass
             
             result.status = "cancelled"

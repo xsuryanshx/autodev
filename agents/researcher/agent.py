@@ -201,7 +201,7 @@ class ResearcherAgent:
             try:
                 results = self._search_web(query)
                 all_results.extend(results)
-            except:
+            except Exception:
                 pass
         
         # Deduplicate and rank

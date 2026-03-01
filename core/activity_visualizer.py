@@ -345,7 +345,7 @@ class ActivityVisualizer:
                 start = datetime.fromisoformat(events[0].get('timestamp', '').replace('Z', '+00:00'))
                 end = datetime.fromisoformat(events[-1].get('timestamp', '').replace('Z', '+00:00'))
                 stats['duration'] = (end - start).total_seconds()
-            except:
+            except Exception:
                 pass
         
         # Count events
@@ -390,7 +390,7 @@ class ActivityVisualizer:
                         "status": data.get("status", "N/A"),
                         "events": data.get("total_events", 0)
                     })
-            except:
+            except Exception:
                 pass
         
         return sorted(sessions, key=lambda x: x['session_id'], reverse=True)
