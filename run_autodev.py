@@ -147,8 +147,57 @@ Write comprehensive code and tests. Commit your changes with descriptive message
     completed = sum(1 for r in results if r.status == "completed")
     logger.info(f"Completed: {completed}/{len(results)} features")
     
-    # Step 4: Create PR
-    logger.info("Creating pull request...")
+    # Step 4: Review all changes before creating PR
+    logger.info("")
+    logger.info("🔍 Step 4: Running agent-to-agent code review...")
+    logger.info("-" * 60)
+    
+    # Import reviewer
+    from agents.reviewer.agent import ReviewerAgent
+    
+    review_results = []
+    for feature in plan['features']:
+        branch_name = f"feature/{feature['id']}"
+        
+        logger.info(f"   Reviewing branch: {branch_name}")
+        
+        reviewer = ReviewerAgent(config=agent_config)
+        
+        # Review the branch
+        status, issues, metadata = reviewer.review_branch(
+            repo_path=local_repo_path,
+            branch=branch_name,
+            base="main"
+        )
+        
+        if status == "approved":
+            logger.info(f"   ✅ {branch_name}: Approved")
+            review_results.append({"branch": branch_name, "status": "approved", "issues": []})
+        else:
+            logger.warning(f"   ❌ {branch_name}: {len(issues)} issues found")
+            for issue in issues[:3]:
+                logger.warning(f"      - {issue}")
+            
+            # If issues found, try to fix with research agent
+            if issues:
+                logger.info(f"   🔧 Running research agent to find solutions...")
+                for issue in issues[:2]:  # Fix top 2 issues
+                    research_result = researcher.research_error(issue)
+                    logger.info(f"      Research: {research_result.get('recommended_fix', '')[:100]}...")
+            
+            review_results.append({"branch": branch_name, "status": "changes_requested", "issues": issues})
+    
+    # Check if all reviews passed
+    all_approved = all(r["status"] == "approved" for r in review_results)
+    
+    if not all_approved:
+        logger.warning("⚠️ Some branches have review issues. Still creating PR for human review.")
+    else:
+        logger.info("✅ All branches reviewed and approved!")
+    
+    # Step 5: Create PR
+    logger.info("")
+    logger.info("📝 Step 5: Creating pull request...")
     try:
         # Get first feature branch for PR
         first_branch = tasks[0]['branch']
