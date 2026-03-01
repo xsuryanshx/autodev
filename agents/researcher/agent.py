@@ -22,7 +22,7 @@ class ResearcherAgent:
     def __init__(self, config: Optional[Dict[str, Any]] = None):
         self.config = config or {}
         self.logger = get_logger("autodev.researcher")
-        self.tavily_api_key = os.environ.get("TAVILY_API_KEY") or "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"
+        self.tavily_api_key = os.environ.get("TAVILY_API_KEY", "")
         self._tavily_client = None
     
     def _get_tavily_client(self):

@@ -356,8 +356,9 @@ def can_run_parallel(subtask_a, subtask_b):
 ```
 autodev/
 ├── README.md
-├── harness_comparison.md    # OpenAI alignment analysis
-├── bugs_and_improvements.md # Known issues
+├── docs/                    # Documentation
+│   ├── harness_comparison.md
+│   └── bugs_and_improvements.md
 ├── subtask_plan.md          # Current task plan
 ├── config/
 │   ├── default.yaml         # Default config
@@ -608,7 +609,7 @@ python autodev.py --feature user-auth --agent coder_1
 
 ## OpenAI Harness Alignment
 
-See [harness_comparison.md](./harness_comparison.md) for detailed comparison with OpenAI's approach.
+See [harness_comparison.md](./docs/harness_comparison.md) for detailed comparison with OpenAI's approach.
 
 ### Key Features Matching OpenAI
 - ✅ Humans steer, agents execute

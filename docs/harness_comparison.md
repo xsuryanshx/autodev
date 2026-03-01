@@ -94,6 +94,6 @@
 
 ## Next Steps
 
-See [README.md](./README.md) for updated roadmap.
+See [README.md](../README.md) for updated roadmap.
 
 *Generated: 2026-03-01*

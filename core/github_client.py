@@ -51,8 +51,12 @@ class GitHubClient:
             try:
                 response = requests.request(method, url, **kwargs)
 
-                # Handle rate limiting (429)
-                if response.status_code == 429:
+                # Handle rate limiting (429 or 403 with rate limit headers)
+                if response.status_code == 429 or (
+                    response.status_code == 403 and 
+                    "X-RateLimit-Remaining" in response.headers and
+                    response.headers["X-RateLimit-Remaining"] == "0"
+                ):
                     reset_time = int(response.headers.get("X-RateLimit-Reset", 0))
                     if reset_time:
                         wait_time = max(reset_time - time.time(), 0) + 1
