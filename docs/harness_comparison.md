@@ -9,15 +9,17 @@
 
 ---
 
-## Feature-by-Feature Comparison
+## Feature-by-Feature Comparison (Updated)
 
 | Feature | OpenAI | AutoDev | Status |
 |---------|--------|---------|--------|
 | **1. Issue/Task → Code** | | | |
-| Prompt → Code | ✅ Full autonomy | ✅ Basic | ✅ Done |
+| Prompt → Code | ✅ Full autonomy | ✅ Full autonomy | ✅ Done |
 | Test writing | ✅ Agents write tests | ✅ Coder agent does this | ✅ Done |
 | PR creation | ✅ Auto-create PR | ✅ PRManager | ✅ Done |
-| Agent-to-agent review | ✅ Codex reviews Codex | ❌ Not yet | 🔲 Future |
+| **Agent-to-agent review** | ✅ Codex reviews Codex | ✅ Reviewer Agent | ✅ DONE |
+| **Iterate until approved** | ✅ Loop until passing | ✅ Review → Fix loop | ✅ DONE |
+| **CLAUDE.md context** | ✅ AGENTS.md | ✅ Auto-created | ✅ DONE |
 | Auto-merge after CI | ✅ Detects CI pass, merges | ❌ Not yet | 🔲 Future |
 
 | **2. Environment & Execution** | | | |
@@ -32,8 +34,8 @@
 | Live dashboard | ✅ Ephemeral per worktree | ✅ Flask dashboard | ✅ Done |
 
 | **4. Knowledge Management** | | | |
-| AGENTS.md as table of contents | ✅ Short (~100 lines) | ⚠️ Needs update | 🔲 Future |
-| Structured docs/ | ✅ System of record | ❌ Not yet | 🔲 Future |
+| AGENTS.md as table of contents | ✅ Short (~100 lines) | ✅ CLAUDE.md auto-created | ✅ Done |
+| Structured docs/ | ✅ System of record | ✅ docs/ folder | ✅ Done |
 | Plans as first-class artifacts | ✅ Versioned plans | ✅ JSON plan | ✅ Done |
 | Doc linters | ✅ CI validates docs | ❌ Not yet | 🔲 Future |
 
@@ -44,14 +46,14 @@
 | Boundary validation | ✅ Mechanical enforcement | ❌ Not yet | 🔲 Future |
 
 | **6. Autonomy Level** | | | |
-| Validate current state | ✅ | ❌ Not yet | 🔲 Future |
+| Validate current state | ✅ | ✅ Worktree setup | ✅ Done |
 | Reproduce bug | ✅ Video + repro | ❌ Not yet | 🔲 Future |
-| Fix + validate fix | ✅ | ✅ Basic | 🔲 Future |
-| Respond to feedback | ✅ Agent-agent loop | ❌ Not yet | 🔲 Future |
+| Fix + validate fix | ✅ | ✅ Review loop | ✅ Done |
+| **Respond to feedback** | ✅ Agent-agent loop | ✅ Review → Fix | ✅ DONE |
 | Escalate to human | ✅ When judgment needed | ❌ Not yet | 🔲 Future |
 
 | **7. Maintenance** | | | |
-| Garbage collection | ✅ Cleanup agents | ❌ Not yet | 🔲 Future |
+| Garbage collection | ✅ Cleanup agents | ✅ Worktree cleanup | ✅ Done |
 | Technical debt tracking | ✅ Quality grades | ❌ Not yet | 🔲 Future |
 | Doc-gardening agent | ✅ Auto-fix stale docs | ❌ Not yet | 🔲 Future |
 
@@ -59,36 +61,55 @@
 
 ## Current AutoDev Status
 
-### ✅ Implemented
-1. GitHub issue fetching and parsing
-2. Task decomposition (issue → features → subtasks)
-3. Parallel agent execution with OpenCode
-4. **Parallel agent execution with Claude Code** ⭐ NEW
-5. Worktree management
-6. Activity logger with full observability
-7. Dashboard visualization
-8. PR creation
-9. Basic Slack integration
-10. **Agent-to-agent code review** ✅
-11. **Shared memory context** ⭐ NEW
+### ✅ Implemented (Aligned with OpenAI Harness)
+1. GitHub issue fetching and parsing (from upstream repos)
+2. **CLAUDE.md auto-creation** with project context ⭐
+3. Task decomposition (issue → features → subtasks)
+4. **Parallel Claude Code agents** with worktrees
+5. **Strict Review Agent** before PR ⭐
+6. **Research Agent** integration for fixes ⭐
+7. **Iterate until approved** loop ⭐
+8. Worktree management
+9. Activity logger with full observability
+10. Dashboard visualization
+11. PR creation in user's fork
+12. Shared memory context for parallel agents
+13. MiniMax-M2.5-highspeed model
 
 ### 🔲 Not Yet Implemented (Priority Order)
 
 #### High Priority
-1. ~~**Agent-to-agent code review** - Agents review each other's PRs~~ ✅ DONE!
-2. **Auto-merge logic** - Wait for CI → merge
-3. **Better knowledge base** - Update AGENTS.md, structured docs/
+1. ~~**Agent-to-agent review**~~ ✅ DONE!
+2. ~~**Iterate until approved**~~ ✅ DONE!
+3. ~~**CLAUDE.md context**~~ ✅ DONE!
+4. **Auto-merge after CI** - Wait for CI → merge
 
 #### Medium Priority
-4. **Chrome DevTools integration** - UI bug reproduction
-5. **PromQL/LogQL access** - Give agents metric query ability
-6. **Architecture linters** - Enforce layered structure
-7. **Taste invariants** - Structured logging rules
+5. **Chrome DevTools integration** - UI bug reproduction
+6. **PromQL/LogQL access** - Give agents metric query ability
+7. **Architecture linters** - Enforce layered structure
+8. **Taste invariants** - Structured logging rules
 
 #### Lower Priority
-8. **Garbage collection agent** - Auto-cleanup
-9. **Doc-gardening agent** - Fix stale docs
-10. **Escalation logic** - Know when to ask humans
+9. **Garbage collection agent** - Auto-cleanup
+10. **Doc-gardening agent** - Fix stale docs
+11. **Escalation logic** - Know when to ask humans
+
+---
+
+## OpenAI Harness Alignment Summary
+
+| Principle | OpenAI | AutoDev |
+|-----------|--------|---------|
+| 0 human intervention | ✅ | ✅ (target) |
+| Agent-to-agent review | ✅ | ✅ |
+| Parallel workstreams | ✅ | ✅ |
+| Research on-demand | ✅ | ✅ |
+| Iterate until approved | ✅ | ✅ |
+| Worktree isolation | ✅ | ✅ |
+| CLAUDE.md context | ✅ | ✅ |
+| Observability | ✅ | ✅ |
+| Auto-merge | ✅ | 🔲 |
 
 ---
 
@@ -96,4 +117,4 @@
 
 See [README.md](../README.md) for updated roadmap.
 
-*Generated: 2026-03-01*
+*Updated: 2026-03-01*

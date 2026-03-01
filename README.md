@@ -4,11 +4,95 @@
 
 **Name:** AutoDev - Autonomous Coding Agent Harness
 
-**Mission:** Build a system that, given a GitHub repository and an issue, can autonomously understand the problem, plan a solution, implement it with tests, iterate on failures, and create mergeable PRs — with minimal human intervention.
+**Mission:** Build a system that, given a GitHub repository and an issue, can autonomously understand the problem, plan a solution, implement it with tests, iterate on failures, and create mergeable PRs — with **0 human intervention**.
 
 **Inspiration:** 
-- [OpenAI: Harnessing Engineering](https://openai.com/index/harness-engineering/)
+- [OpenAI: Harness Engineering](https://openai.com/index/harness-engineering/) - **Primary Reference**
 - Anthropic's agentic patterns
+
+---
+
+## OpenAI Harness-Aligned Workflow
+
+This implementation follows the OpenAI Harness Engineering pattern exactly:
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         FULL AUTOMATED FLOW                             │
+│                    (0 Human Intervention Target)                          │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    │
+        ┌───────────────────────────┼───────────────────────────┐
+        ▼                           ▼                           ▼
+   ┌─────────┐               ┌─────────────┐              ┌──────────┐
+   │ FORK   │               │ FETCH ISSUE │              │ SETUP    │
+   │ Repo   │               │ from        │              │ CLAUDE.md│
+   └─────────┘               │ upstream    │              └──────────┘
+        │                    └─────────────┘                   │
+        │                            │                         │
+        ▼                            ▼                         ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                     TASK DECOMPOSITION                                   │
+│  Issue → Features → Subtasks (parallel workstreams)                    │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    │
+        ┌─────────────────────────────┼─────────────────────────────┐
+        ▼                             ▼                             ▼
+┌───────────────────┐   ┌───────────────────┐   ┌───────────────────┐
+│  CODER AGENT 1   │   │  CODER AGENT 2   │   │  CODER AGENT N   │
+│  (Feature A)      │   │  (Feature B)     │   │  (Feature N)      │
+│                   │   │                   │   │                   │
+│ - Write code     │   │ - Write code     │   │ - Write code     │
+│ - Write tests    │   │ - Write tests    │   │ - Write tests    │
+│ - Run tests      │   │ - Run tests      │   │ - Run tests      │
+│ - Iterate        │   │ - Iterate        │   │ - Iterate        │
+└───────────────────┘   └───────────────────┘   └───────────────────┘
+        │                         │                         │
+        └─────────────────────────┼─────────────────────────┘
+                                  ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                     REVIEWER AGENT (Strict)                            │
+│  ┌─────────────────────────────────────────────────────────────────┐  │
+│  │ • Code review for each branch                                   │  │
+│  │ • Check for bugs, quality, tests, security                     │  │
+│  │ • APPROVED → proceed | CHANGES_REQUESTED → fix                │  │
+│  └─────────────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────────┘
+                                  │
+                                  ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                     RESEARCH AGENT (On-Demand)                         │
+│  ┌─────────────────────────────────────────────────────────────────┐  │
+│  │ • Called when Reviewer finds issues                             │  │
+│  │ • Web search for solutions                                      │  │
+│  │ • Deep research on errors                                       │  │
+│  │ • Feed learnings back to Coders                                 │  │
+│  └─────────────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────────┘
+                                  │
+                                  ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                     ITERATE UNTIL APPROVED                             │
+│  Loop: Code → Review → Research → Fix → Review → ... → APPROVED      │
+└─────────────────────────────────────────────────────────────────────────┘
+                                  │
+                                  ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                     CREATE PR (Only After Approval)                    │
+│  • All branches approved                                               │
+│  • CI waits (future: auto-merge)                                      │
+│  • PR created in user's fork                                          │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### Key Principles (From OpenAI Harness)
+
+1. **Humans Steer, Agents Execute** - Engineers design environment, specify intent, build feedback loops
+2. **0 Lines of Manually-Written Code** - Everything written by agents
+3. **Agent-to-Agent Review** - Agents review each other's work before merging
+4. **Parallel Workstreams** - Each feature gets its own git worktree + agent
+5. **Continuous Iteration** - Agents iterate until review passes
+6. **Research on Demand** - Research agent called only when needed
 
 ---
 
