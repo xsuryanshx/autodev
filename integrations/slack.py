@@ -164,7 +164,8 @@ class AutoDevSlackBot:
         
         # TODO: Trigger AutoDev here
         # from run_autodev import run_autodev
-        # result = run_autodev(...)
+        # result = run_autodev(issue_description=bug_description, repo=self.repo)
+        # Example: result = run_autodev(task=f"Fix bug: {bug_description}", repo_path=self.repo)
         
         # For now, just reply
         self.slack.post_message(

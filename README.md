@@ -356,34 +356,30 @@ def can_run_parallel(subtask_a, subtask_b):
 ```
 autodev/
 ├── README.md
+├── harness_comparison.md    # OpenAI alignment analysis
+├── bugs_and_improvements.md # Known issues
 ├── subtask_plan.md          # Current task plan
 ├── config/
 │   ├── default.yaml         # Default config
 │   └── repos/              # Repo-specific configs
 │       └── my-repo.yaml
 ├── agents/
-│   ├── initiator/
-│   │   ├── agent.py
-│   │   └── skills/
-│   ├── coder/
-│   │   ├── agent.py
-│   │   └── skills/
-│   └── researcher/
-│       ├── agent.py
-│       └── skills/
+│   ├── initiator/           # Orchestrates workflow
+│   ├── coder/               # Writes code
+│   ├── reviewer/            # Agent-to-agent review ⭐ NEW
+│   └── researcher/          # Web search for errors
 ├── core/
-│   ├── task_decomposer.py
-│   ├── task_queue.py
 │   ├── github_client.py
-│   ├── executor.py
-│   └── state_manager.py
-├── utils/
-│   ├── logger.py
-│   ├── metrics.py
-│   └── validators.py
-└── tests/
-    ├── test_agents.py
-    └── test_integration.py
+│   ├── task_decomposer.py
+│   ├── parallel_executor.py
+│   ├── pr_manager.py
+│   ├── activity_logger.py
+│   └── session_history.py
+├── dashboard/               # Web dashboard
+├── integrations/
+│   └── slack_bot.py         # Slack integration
+└── utils/
+    └── logger.py
 ```
 
 ---
@@ -442,59 +438,99 @@ skills:
 
 ## Phase Roadmap
 
-### Phase 1: Foundation (Week 1)
-- [ ] Set up project structure
-- [ ] Implement GitHub client
-- [ ] Create task decomposer
-- [ ] Basic subtask tracking
+### Phase 1: Foundation ✅ DONE
+- [x] Set up project structure
+- [x] Implement GitHub client
+- [x] Create task decomposer
+- [x] Basic subtask tracking
 
-### Phase 2: Single Agent (Week 2)
-- [ ] Implement Coder agent
-- [ ] Connect to Claude Code
-- [ ] Basic test execution
-- [ ] Error handling
+### Phase 2: Single Agent ✅ DONE
+- [x] Implement Coder agent
+- [x] Connect to Claude Code / OpenCode
+- [x] Basic test execution
+- [x] Error handling
 
-### Phase 3: Multi-Agent (Week 3)
-- [ ] Implement Initiator
-- [ ] Task queue system
-- [ ] Parallel execution
-- [ ] Real-time updates
+### Phase 3: Multi-Agent ✅ DONE
+- [x] Implement Initiator
+- [x] Task queue system
+- [x] Parallel execution
+- [x] Real-time updates
 
-### Phase 4: Research Integration (Week 4)
-- [ ] Implement Research agent
-- [ ] Web search integration
-- [ ] Error analysis
-- [ ] Feedback loop
+### Phase 4: Research Integration ✅ DONE
+- [x] Implement Research agent
+- [x] Web search integration
+- [x] Error analysis
+- [x] Feedback loop
 
-### Phase 5: PR Pipeline (Week 5)
-- [ ] PR creation
-- [ ] Auto-merge logic
-- [ ] Code review integration
-- [ ] Full end-to-end test
+### Phase 5: PR Pipeline ✅ DONE
+- [x] PR creation
+- [x] Agent-to-agent code review ⭐
+- [ ] Auto-merge after CI
+- [x] Full end-to-end test
 
-### Phase 6: Polish (Week 6)
+### Phase 6: Polish 🔄
+- [x] Enhanced logging
 - [ ] Error handling improvements
-- [ ] Performance optimization
-- [ ] Documentation
+- [ ] Rate limiting
+- [ ] Test coverage
 - [ ] Production deployment
+
+---
+
+## Agent Selection
+
+AutoDev supports multiple agent backends. You can choose which agent to use based on your setup.
+
+### Available Agents
+
+- **opencode** - Uses OpenCode CLI (default)
+- **claude-code** - Uses Claude Code CLI
+
+### Command-Line Flags
+
+| Flag | Description |
+|------|-------------|
+| `--agent-type` | Choose agent backend: `opencode` or `claude-code` |
+| `--claude-skip-permissions` | Skip permission prompts for Claude Code (useful for CI/CD) |
+
+### Shared Memory Context
+
+AutoDev maintains a shared memory context across agent sessions using `core/agent_memory.py`. This allows:
+- Context preservation between tasks
+- Cross-agent knowledge sharing
+- Persistent conversation history
+
+The memory is stored in `.agent_memory/` directory and persists between runs.
 
 ---
 
 ## Usage Examples
 
-### Example 1: Start from Issue
+### Example 1: Start from Issue (OpenCode)
 
 ```bash
 python autodev.py --repo owner/repo --issue 123
 ```
 
-### Example 2: Resume from Plan
+### Example 2: Start from Issue (Claude Code)
+
+```bash
+python autodev.py --repo owner/repo --issue 123 --agent-type claude-code
+```
+
+### Example 3: Claude Code with Skip Permissions
+
+```bash
+python autodev.py --repo owner/repo --issue 123 --agent-type claude-code --claude-skip-permissions
+```
+
+### Example 4: Resume from Plan
 
 ```bash
 python autodev.py --resume subtask_plan.json
 ```
 
-### Example 3: Run Specific Feature
+### Example 5: Run Specific Feature
 
 ```bash
 python autodev.py --feature user-auth --agent coder_1
@@ -534,6 +570,57 @@ python autodev.py --feature user-auth --agent coder_1
 
 ---
 
-*Plan Version: 1.0*
-*Created: 2026-02-28*
+## Current Status & Roadmap
+
+### ✅ Implemented
+
+| Component | Status |
+|-----------|--------|
+| GitHub issue fetching & parsing | ✅ Done |
+| Task decomposition | ✅ Done |
+| Parallel execution with OpenCode | ✅ Done |
+| Worktree management | ✅ Done |
+| Activity logger + Dashboard | ✅ Done |
+| PR creation | ✅ Done |
+| Agent-to-agent code review | ✅ Done |
+| Research agent | ✅ Done |
+| Slack bot integration | ✅ Done |
+| Enhanced logging | ✅ Done |
+
+### 📋 Roadmap
+
+#### 🔴 High Priority (Next)
+1. **Auto-merge after CI** - Wait for CI → merge PR
+2. **Knowledge base** - Update AGENTS.md, structured docs/
+3. **Fix bugs** - See bugs_and_improvements.md
+
+#### 🟡 Medium Priority
+4. Chrome DevTools - UI bug reproduction
+5. PromQL/LogQL access - Agents query metrics
+6. Architecture linters - Enforce structure
+
+#### 🟢 Future
+7. Garbage collection agent - Auto-cleanup
+8. Doc-gardening agent - Fix stale docs
+9. Cost tracking - API spend per run
+
+---
+
+## OpenAI Harness Alignment
+
+See [harness_comparison.md](./harness_comparison.md) for detailed comparison with OpenAI's approach.
+
+### Key Features Matching OpenAI
+- ✅ Humans steer, agents execute
+- ✅ Issue → Code → PR workflow
+- ✅ Parallel agents with worktrees
+- ✅ Agent-to-agent code review
+- ✅ Activity logging & observability
+- 🔲 Auto-merge after CI (in progress)
+- 🔲 Chrome DevTools for UI testing
+
+---
+
+*Plan Version: 1.2*
+*Updated: 2026-03-01*
 *Based on OpenAI Harness Engineering + Anthropic Agent Patterns*

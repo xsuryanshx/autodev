@@ -177,6 +177,10 @@ class AutoDevSlackBot:
         print(f"Running AutoDev on issue #{issue_number}...")
         
         # TODO: Integrate with actual AutoDev pipeline
+        # from core.orchestrator import Orchestrator
+        # orchestrator = Orchestrator(repo_path=self.repo_path, issue_id=issue_number)
+        # pr_url = await orchestrator.run()
+        # return pr_url
         pr_url = f"https://github.com/{self.repo_owner}/{self.repo_name}/pull/new/feature/fix-{issue_number}"
         
         return pr_url
