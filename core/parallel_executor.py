@@ -231,7 +231,7 @@ class ParallelExecutor:
         # Wait for completion if requested
         if wait:
             completed_count = 0
-            total_tasks = len(results)
+            total_tasks = len(tasks)  # Total tasks including queued ones
             next_task_index = started_count
             
             while self.active_agents:

@@ -56,6 +56,7 @@ def get_trajectory(session_id: str) -> Optional[Dict]:
 
 
 def get_events(session_id: str) -> List[Dict]:
+    events_file = Path(LOG_DIR) / f"events_{session_id}.jsonl"
     
     if not events_file.exists():
         return []
