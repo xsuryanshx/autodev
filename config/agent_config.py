@@ -11,7 +11,7 @@ DEFAULT_AGENT = 'claude-code'
 class AgentConfig:
     """Configuration for coding agents."""
     agent_type: str  # 'opencode' or 'claude-code'
-    model: str = "MiniMax-M2.5"
+    model: str = "MiniMax-M2.5-highspeed"
     skip_permissions: bool = False  # Only for claude-code
     timeout: int = 300  # seconds
     max_retries: int = 3
