@@ -1,7 +1,7 @@
 """Research Agent - researches errors and provides solutions."""
 from typing import Dict, Any, Optional, List
 from utils.logger import get_logger
-from web_search import web_search
+import json
 
 
 class ResearcherAgent:
@@ -42,7 +42,7 @@ class ResearcherAgent:
         # Extract key terms from error
         query = self._build_search_query(error, context)
         
-        # Search the web
+        # Search the web using available tools
         search_results = self._search_web(query)
         
         # Analyze and synthesize findings
@@ -95,14 +95,19 @@ class ResearcherAgent:
         return query
     
     def _search_web(self, query: str) -> List[Dict[str, Any]]:
-        """Search the web for solutions."""
+        """Search the web for solutions using web_search."""
         try:
+            # Try using web_search from tools
+            from web_search import web_search
             results = web_search(
                 query=query,
                 count=5,
                 freshness="pm"  # Past month
             )
             return results
+        except ImportError:
+            self.logger.warning("web_search not available, using empty results")
+            return []
         except Exception as e:
             self.logger.error(f"Search failed: {e}")
             return []
@@ -194,7 +199,7 @@ class ResearcherAgent:
         all_results = []
         for query in queries:
             try:
-                results = web_search(query=query, count=3)
+                results = self._search_web(query)
                 all_results.extend(results)
             except:
                 pass
