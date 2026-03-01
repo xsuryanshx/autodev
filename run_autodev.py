@@ -106,19 +106,20 @@ Write comprehensive code and tests. Commit your changes with descriptive message
         # Get first feature branch for PR
         first_branch = tasks[0]['branch']
         
-        pr = pr_manager.create_pr(
-            branch=first_branch,
-            title=f"AutoDev: {issue['title']}",
-            body=f"""## AutoDev Generated PR
+        body = f"""## AutoDev Generated PR
 
 **Issue:** #{issue_number}: {issue['title']}
 
 ### Features Implemented
 """
-        )
-        
         for feature in plan['features']:
-            pr_body += f"- {feature['name']}\n"
+            body += f"- {feature['name']}\n"
+        
+        pr = pr_manager.create_pr(
+            branch=first_branch,
+            title=f"AutoDev: {issue['title']}",
+            body=body
+        )
         
         logger.info(f"PR created: {pr['html_url']}")
     except Exception as e:
