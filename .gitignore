@@ -1,5 +1,73 @@
+# Python
 __pycache__/
-*.pyc
-.env
-.autodev/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
 
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+.pyenv/
+.python-version
+
+# pyproject.toml & uv.lock (use pip/venv instead)
+pyproject.toml
+uv.lock
+requirements*.txt
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Environment
+.env
+.env.local
+
+# AutoDev
+.autodev/
+*.log
+
+# Logs
+logs/
+*.log
+
+# Node
+node_modules/
+
+# Dependencies
+requirements-lock.txt
+package-lock.json
+yarn.lock
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,4 +1,5 @@
 """Research Agent - researches errors and provides solutions."""
+import os
 from typing import Dict, Any, Optional, List
 from utils.logger import get_logger
 import json
@@ -21,6 +22,19 @@ class ResearcherAgent:
     def __init__(self, config: Optional[Dict[str, Any]] = None):
         self.config = config or {}
         self.logger = get_logger("autodev.researcher")
+        self.tavily_api_key = os.environ.get("TAVILY_API_KEY", "")
+        self._tavily_client = None
+    
+    def _get_tavily_client(self):
+        """Lazy load Tavily client."""
+        if self._tavily_client is None:
+            try:
+                from tavily import TavilyClient
+                self._tavily_client = TavilyClient(api_key=self.tavily_api_key)
+            except ImportError:
+                self.logger.warning("Tavily not installed. Install with: pip install tavily")
+                return None
+        return self._tavily_client
     
     def research_error(
         self,
@@ -95,18 +109,45 @@ class ResearcherAgent:
         return query
     
     def _search_web(self, query: str) -> List[Dict[str, Any]]:
-        """Search the web for solutions using web_search."""
+        """Search the web for solutions using Tavily."""
+        client = self._get_tavily_client()
+        
+        if client is None:
+            return self._fallback_search(query)
+        
         try:
-            # Try using web_search from tools
-            from web_search import web_search
-            results = web_search(
+            # Search with Tavily
+            results = client.search(
                 query=query,
-                count=5,
-                freshness="pm"  # Past month
+                max_results=5,
+                include_answer=True,
+                include_raw_content=False
             )
+            
+            # Format results
+            formatted = []
+            for result in results.get("results", []):
+                formatted.append({
+                    "title": result.get("title", ""),
+                    "snippet": result.get("content", ""),
+                    "url": result.get("url", ""),
+                    "relevance": result.get("score", 0.5)
+                })
+            
+            return formatted
+            
+        except Exception as e:
+            self.logger.error(f"Tavily search failed: {e}")
+            return self._fallback_search(query)
+    
+    def _fallback_search(self, query: str) -> List[Dict[str, Any]]:
+        """Fallback when Tavily is not available."""
+        try:
+            from web_search import web_search
+            results = web_search(query=query, count=5, freshness="pm")
             return results
         except ImportError:
-            self.logger.warning("web_search not available, using empty results")
+            self.logger.warning("No search backend available")
             return []
         except Exception as e:
             self.logger.error(f"Search failed: {e}")
@@ -201,7 +242,7 @@ class ResearcherAgent:
             try:
                 results = self._search_web(query)
                 all_results.extend(results)
-            except:
+            except Exception:
                 pass
         
         # Deduplicate and rank

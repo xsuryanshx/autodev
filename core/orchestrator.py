@@ -193,6 +193,7 @@ class AutoDevOrchestrator:
             
             self.logger.info(f"Research complete. Confidence: {research['confidence']:.2f}")
             # TODO: Feed research back to coder for retry
+            # self.coder.retry_with_context(subtask_id=subtask['id'], research=research)
     
     def create_pull_request(self, branch: str = "main") -> Dict[str, Any]:
         """Create a PR after all tasks complete."""

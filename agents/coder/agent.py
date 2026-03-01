@@ -153,7 +153,8 @@ class CoderAgent:
             sha = None
             try:
                 existing = self.github_client.get_file_content(file_path, ref=branch)
-            except:
+                sha = existing.get("sha") if isinstance(existing, dict) else None
+            except Exception:
                 pass
             
             # Create or update file
@@ -253,6 +254,8 @@ class CoderAgent:
             return False
         
         prompt = f"Fix the following errors in the code:\n{error_output}"
-        result = self._run_opencode(prompt, os.path.dirname(self.current_subtask.get("file", ".")))
+        file_path = self.current_subtask.get("file", ".")
+        repo_path = os.path.dirname(file_path) if file_path and file_path != "." else "."
+        result = self._run_opencode(prompt, repo_path)
         
         return result["status"] == "completed"

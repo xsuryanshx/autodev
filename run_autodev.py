@@ -9,11 +9,13 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from config.loader import load_config
+from config.agent_config import AgentConfig, get_agent_config
 from core.github_client import GitHubClient
 from core.state_manager import StateManager
 from core.task_decomposer import TaskDecomposer
 from core.parallel_executor import ParallelExecutor
 from core.session_history import SessionHistory
+from core.agent_memory import AgentMemory
 from core.pr_manager import PRManager
 from agents.researcher.agent import ResearcherAgent
 from utils.logger import setup_logger
@@ -25,26 +27,40 @@ def run_autodev(
     issue_number: int,
     github_token: str,
     local_repo_path: str,
-    max_agents: int = 4
+    max_agents: int = 4,
+    agent_type: str = "opencode",
+    use_claude_skip_permissions: bool = False
 ):
     """Run AutoDev end-to-end on a GitHub issue."""
     logger = setup_logger()
-    logger.info(f"Starting AutoDev for {repo_owner}/{repo_name} issue #{issue_number}")
+    logger.info(f"🤖 Starting AutoDev for {repo_owner}/{repo_name} issue #{issue_number}")
+    logger.info(f"   Agent: {agent_type} | Max Agents: {max_agents}")
+    logger.info("=" * 60)
+    
+    # Initialize agent config
+    agent_config = AgentConfig(
+        agent_type=agent_type,
+        skip_permissions=use_claude_skip_permissions
+    )
+    logger.info(f"   Using {agent_type} for code generation")
     
     # Initialize components
     github = GitHubClient(token=github_token, owner=repo_owner, repo=repo_name)
-    state_manager = StateManager()
     session_history = SessionHistory()
+    agent_memory = AgentMemory(session_id=session_history.session_id)
     pr_manager = PRManager(github)
     researcher = ResearcherAgent()
     
     # Step 1: Fetch issue
-    logger.info("Fetching issue from GitHub...")
+    logger.info("📥 Step 1: Fetching issue from GitHub...")
     issue = github.get_issue(issue_number)
-    logger.info(f"Issue: {issue['title']}")
+    logger.info(f"   Title: {issue['title']}")
+    logger.info(f"   Labels: {issue.get('labels', [])}")
+    logger.info(f"   URL: {issue['html_url']}")
     
     # Step 2: Create task plan
-    logger.info("Decomposing issue into tasks...")
+    logger.info("")
+    logger.info("📋 Step 2: Decomposing issue into tasks...")
     decomposer = TaskDecomposer()
     plan = decomposer.decompose_issue(issue)
     state_manager.current_plan = plan
@@ -56,12 +72,20 @@ def run_autodev(
         total_subtasks=plan['metadata']['total_subtasks']
     )
     
-    logger.info(f"Created plan with {plan['metadata']['total_subtasks']} subtasks")
-    logger.info(f"Features: {[f['name'] for f in plan['features']]}")
+    logger.info(f"   📦 Created {plan['metadata']['total_subtasks']} subtasks across {len(plan['features'])} features")
+    for i, feature in enumerate(plan['features'], 1):
+        subtasks = len(feature.get('subtasks', []))
+        logger.info(f"      {i}. {feature['name']} ({subtasks} subtasks)")
     
-    # Step 3: Execute in parallel using OpenCode
-    logger.info(f"Starting parallel execution with {max_agents} agents...")
-    executor = ParallelExecutor(local_repo_path, max_agents=max_agents)
+    # Step 3: Execute in parallel using OpenCode or Claude Code
+    logger.info("")
+    logger.info(f"⚡ Step 3: Starting parallel execution with {max_agents} agents...")
+    logger.info("-" * 60)
+    executor = ParallelExecutor(
+        local_repo_path, 
+        max_agents=max_agents,
+        agent_config=agent_config
+    )
     
     # Build tasks for each feature
     tasks = []
@@ -147,6 +171,17 @@ def main():
     parser.add_argument("--token", help="GitHub token (or GITHUB_TOKEN env)")
     parser.add_argument("--local-repo", required=True, help="Local repo path")
     parser.add_argument("--agents", type=int, default=4, help="Max parallel agents")
+    parser.add_argument(
+        "--agent-type", 
+        choices=['opencode', 'claude-code'], 
+        default='opencode',
+        help="Agent to use for code generation (opencode or claude-code)"
+    )
+    parser.add_argument(
+        "--claude-skip-permissions",
+        action="store_true",
+        help="Use --dangerously-skip-permissions for Claude Code (auto-approve edits)"
+    )
     
     args = parser.parse_args()
     
@@ -166,12 +201,15 @@ def main():
         issue_number=args.issue,
         github_token=token,
         local_repo_path=args.local_repo,
-        max_agents=args.agents
+        max_agents=args.agents,
+        agent_type=args.agent_type,
+        use_claude_skip_permissions=args.claude_skip_permissions
     )
     
     print(f"\n✅ AutoDev Complete!")
     print(f"   Issue: {result['issue']}")
     print(f"   Features: {result['completed']}/{result['total']}")
+    print(f"   Agent: {args.agent_type}")
 
 
 if __name__ == "__main__":

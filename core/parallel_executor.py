@@ -1,4 +1,4 @@
-"""Parallel executor using OpenCode for multi-agent execution."""
+"""Parallel executor using OpenCode or Claude Code for multi-agent execution."""
 import subprocess
 import os
 import signal
@@ -8,6 +8,7 @@ from typing import Dict, Any, List, Optional, Tuple
 from dataclasses import dataclass
 from core.session_history import SessionHistory
 from utils.logger import get_logger
+from config.agent_config import AgentConfig, DEFAULT_AGENT
 
 
 @dataclass
@@ -23,7 +24,7 @@ class AgentResult:
 
 class ParallelExecutor:
     """
-    Executes tasks in parallel using OpenCode agents.
+    Executes tasks in parallel using OpenCode or Claude Code agents.
     Manages multiple worktrees and agent sessions.
     """
     
@@ -31,12 +32,16 @@ class ParallelExecutor:
         self,
         base_repo: str,
         max_agents: int = 4,
-        session_dir: str = ".autodev/sessions"
+        session_dir: str = ".autodev/sessions",
+        agent_config: Optional[AgentConfig] = None
     ):
         self.base_repo = Path(base_repo)
         self.max_agents = max_agents
         self.session_history = SessionHistory(session_dir)
         self.logger = get_logger("autodev.executor")
+        
+        # Agent configuration
+        self.agent_config = agent_config or AgentConfig(agent_type=DEFAULT_AGENT)
         
         # Active agent processes
         self.active_agents: Dict[str, subprocess.Popen] = {}
@@ -75,7 +80,7 @@ class ParallelExecutor:
         timeout: int = 300
     ) -> Tuple[AgentResult, subprocess.Popen]:
         """
-        Spawn an OpenCode agent to work on a branch.
+        Spawn an OpenCode or Claude Code agent to work on a branch.
         
         Returns:
             Tuple of (AgentResult, process)
@@ -86,15 +91,13 @@ class ParallelExecutor:
         
         worktree = self.worktrees[branch]
         
-        self.logger.info(f"Spawning agent {agent_id} on branch {branch}")
+        self.logger.info(f"Spawning {self.agent_config.agent_type} agent {agent_id} on branch {branch}")
         
-        # Build command - use opencode run
-        cmd = [
-            "opencode",
-            "run",
-            "--print-logs",
-            prompt
-        ]
+        # Build command based on agent type
+        if self.agent_config.agent_type == 'claude-code':
+            cmd = self._build_claude_command(prompt, worktree)
+        else:
+            cmd = self._build_opencode_command(prompt)
         
         # Start process
         process = subprocess.Popen(
@@ -107,18 +110,40 @@ class ParallelExecutor:
         )
         
         # Record in session history
-        self.session_history.register_agent(agent_id, "coder", str(worktree))
+        self.session_history.register_agent(agent_id, self.agent_config.agent_type, str(worktree))
         
         result = AgentResult(
             agent_id=agent_id,
             task_id=branch,
             status="running",
-            output=f"Started in {worktree}",
+            output=f"Started {self.agent_config.agent_type} in {worktree}",
             exit_code=None
         )
         
         self.active_agents[agent_id] = process
         return result, process
+    
+    def _build_opencode_command(self, prompt: str) -> List[str]:
+        """Build OpenCode command."""
+        return [
+            "opencode",
+            "run",
+            "--print-logs",
+            prompt
+        ]
+    
+    def _build_claude_command(self, prompt: str, worktree: Path) -> List[str]:
+        """Build Claude Code command."""
+        cmd = ["claude", "-p"]
+        
+        # Add skip permissions if configured
+        if self.agent_config.skip_permissions:
+            cmd.insert(1, "--dangerously-skip-permissions")
+        
+        # Add the prompt
+        cmd.append(prompt)
+        
+        return cmd
     
     def check_agent(self, agent_id: str) -> Optional[AgentResult]:
         """Check if an agent has completed."""
@@ -167,15 +192,23 @@ class ParallelExecutor:
         results = []
         
         # Start agents up to max parallel
-        i = 0
+        started_count = 0
         for task in tasks:
-            if i >= self.max_agents:
+            if started_count >= self.max_agents:
                 break
             
-            agent_id = f"agent_{i+1}"
+            agent_id = f"agent_{started_count+1}"
+            branch_name = task.get("branch", task.get("task_id", f"task_{started_count}"))
+            
+            self.logger.info(f"🚀 Starting agent {agent_id} on branch: {branch_name}")
+            self.logger.info(f"   📋 Task: {task.get('description', task.get('prompt', '')[:80])}...")
+            
+            # Get branch with fallback
+            branch = task.get("branch", task.get("task_id", f"task_{started_count}"))
+            
             result, process = self.spawn_agent(
                 agent_id=agent_id,
-                branch=task["branch"],
+                branch=branch,
                 prompt=task["prompt"],
                 timeout=task.get("timeout", 300)
             )
@@ -183,15 +216,24 @@ class ParallelExecutor:
             # Record start in session history
             self.session_history.agent_start_task(
                 agent_id,
-                task.get("task_id", task["branch"]),
+                task.get("task_id", branch),
                 task.get("description", "")
             )
             
             results.append(result)
-            i += 1
+            started_count += 1
+        
+        # Show pending tasks
+        if len(tasks) > started_count:
+            pending = tasks[started_count:]
+            self.logger.info(f"⏳ {len(pending)} tasks queued: {[t.get('description', t.get('branch', 'unknown')) for t in pending]}")
         
         # Wait for completion if requested
         if wait:
+            completed_count = 0
+            total_tasks = len(tasks)  # Total tasks including queued ones
+            next_task_index = started_count
+            
             while self.active_agents:
                 time.sleep(check_interval)
                 
@@ -199,19 +241,53 @@ class ParallelExecutor:
                 for agent_id in list(self.active_agents.keys()):
                     result = self.check_agent(agent_id)
                     if result:
+                        # Preserve task_id from the original spawn
+                        result.task_id = tasks[completed_count].get("task_id", tasks[completed_count].get("branch", ""))
+                        completed_count += 1
+                        
+                        # Log completion
+                        if result.status == "completed":
+                            self.logger.info(f"✅ Agent {agent_id} completed ({completed_count}/{total_tasks})")
+                        else:
+                            self.logger.error(f"❌ Agent {agent_id} failed: {result.error or 'Unknown error'}")
+                        
                         # Update session history
                         self.session_history.agent_complete_task(
                             agent_id,
-                            "",
+                            result.task_id,
                             success=(result.status == "completed"),
                             message=result.output[:200]
                         )
                         
                         # Replace in results
-                        for i, r in enumerate(results):
+                        for idx, r in enumerate(results):
                             if r.agent_id == agent_id:
-                                results[i] = result
+                                results[idx] = result
                                 break
+                        
+                        # Check if we should start more agents
+                        if next_task_index < len(tasks):
+                            next_task = tasks[next_task_index]
+                            next_agent_id = f"agent_{next_task_index+1}"
+                            next_branch = next_task.get("branch", next_task.get("task_id", ""))
+                            self.logger.info(f"🚀 Starting agent {next_agent_id} on branch: {next_branch}")
+                            
+                            # Actually spawn the new agent
+                            new_result, _ = self.spawn_agent(
+                                agent_id=next_agent_id,
+                                branch=next_branch,
+                                prompt=next_task["prompt"],
+                                timeout=next_task.get("timeout", 300)
+                            )
+                            
+                            self.session_history.agent_start_task(
+                                next_agent_id,
+                                next_task.get("task_id", next_branch),
+                                next_task.get("description", "")
+                            )
+                            
+                            results.append(new_result)
+                            next_task_index += 1
         
         return results
     
