@@ -17,6 +17,7 @@ from core.parallel_executor import ParallelExecutor
 from core.session_history import SessionHistory
 from core.agent_memory import AgentMemory
 from core.pr_manager import PRManager
+from core.project_context import ProjectContextLoader
 from agents.researcher.agent import ResearcherAgent
 from utils.logger import setup_logger
 
@@ -68,6 +69,19 @@ def run_autodev(
     logger.info(f"   Title: {issue['title']}")
     logger.info(f"   Labels: {issue.get('labels', [])}")
     logger.info(f"   URL: {issue['html_url']}")
+    
+    # Step 1.5: Load/Create project context
+    logger.info("")
+    logger.info("📚 Step 1.5: Loading project context...")
+    context_loader = ProjectContextLoader(local_repo_path)
+    project_info = context_loader.detect_project_info()
+    logger.info(f"   Detected: {project_info['language']} | {project_info['framework']}")
+    
+    context = context_loader.get_or_create_context(project_info)
+    if context_loader.has_context():
+        logger.info(f"   ✅ Using existing CLAUDE.md")
+    else:
+        logger.info(f"   ✅ Created default CLAUDE.md")
     
     # Step 2: Create task plan
     logger.info("")
