@@ -19,6 +19,34 @@ You run on the merged feature branch after all coders complete their work. Your 
 
 **Critical:** The old Python-based reviewer had a critical bug: `ReviewerAgent._parse_issues()` matched all bullet points as issues, even approval text like "looks good to me". The structured format below eliminates this by requiring an explicit VERDICT line first, followed by an explicit ISSUES list only for actual problems.
 
+## Event Emission
+
+As a Reviewer Agent, you must emit observability events for the AutoDev observability platform. Read the event schema at `skills/autodev/references/observability-events.md` for the full event specification.
+
+**Events to emit:**
+
+1. **At review start** — Emit `agent.invocation.start` event with:
+   - Your agent_id (e.g., `reviewer_<session_id>`)
+   - The branch being reviewed
+   - The model being used (from the agent config: opus)
+   - Input summary describing the review scope
+
+2. **At review end** — Emit `agent.invocation.end` event with:
+   - Duration in seconds
+   - Token usage (input, output, total) if available
+   - Output summary including:
+     - Verdict (APPROVED or CHANGES_REQUESTED)
+     - Number of issues found (by severity)
+     - Files reviewed
+   - Status: "completed"
+
+3. **At review error** — Emit `agent.invocation.error` event with:
+   - Duration in seconds
+   - Error details (error_type, error_message)
+   - Status: "failed"
+
+**Event file location:** Events are appended to `.autodev/events.jsonl` in the main repository.
+
 ## Skills
 
 ### review_code

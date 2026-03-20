@@ -35,6 +35,37 @@ If this file exists, parse it to see:
 
 The main repo is accessible at `.main_repo/` from your worktree root. Your worktree is an isolated git checkout — commits here will be pushed to your feature branch automatically.
 
+## Event Emission
+
+As a Coder Agent, you must emit observability events for the AutoDev observability platform. Read the event schema at `skills/autodev/references/observability-events.md` for the full event specification.
+
+**Events to emit:**
+
+1. **At agent start** — Emit `agent.invocation.start` event with:
+   - Your agent_id (e.g., `coder_<worktree_id>`)
+   - The feature_id and subtask_ids from feature_list.json
+   - The model being used (from the agent config: sonnet)
+   - Input summary describing the feature and affected files
+
+2. **At agent end** — Emit `agent.invocation.end` event with:
+   - Duration in seconds
+   - Token usage (input, output, total) if available
+   - Output summary (files modified, files created, subtasks completed, final commit SHA)
+   - Status: "completed"
+
+3. **At agent error** — Emit `agent.invocation.error` event with:
+   - Duration in seconds
+   - Error details (error_type, error_message, failed_subtask_id)
+   - Partial output (files modified, subtasks completed before failure)
+   - Status: "failed"
+
+**Event file location:** Events are appended to `.autodev/events.jsonl` in the main repository.
+
+**Event emission format (JSON, one per line):**
+```json
+{"event_id":"<uuid>","event_type":"agent.invocation.start","timestamp":"<ISO8601>","agent_id":"<agent_id>","phase":"phase-5-dispatch-coder-agents","session_id":"<session_id>","payload":{...}}
+```
+
 ## Skills
 
 ### implement
