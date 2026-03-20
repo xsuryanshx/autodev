@@ -50,11 +50,19 @@ class SandboxManager:
         task_id: str,
         timeout_seconds: Optional[int] = None,
         extra_envs: Optional[Dict[str, str]] = None,
+        repo_url: Optional[str] = None,
+        branch: Optional[str] = None,
+        clone_token: Optional[str] = None,
+        skip_setup: bool = False,
     ) -> SandboxBackend:
         """Create a new sandbox for a task.
 
         Picks the backend from config and creates the appropriate sandbox type.
         If a warm snapshot exists (E2B), uses it for fast startup.
+
+        When ``repo_url`` is set (from args or ``SandboxConfig``), calls
+        ``sandbox.setup()`` to clone the repository and install dependencies.
+        Omit ``repo_url`` for local dev / tests with an empty workspace.
         """
         if self._shutdown:
             raise SandboxCreationError("Manager is shut down, cannot create sandboxes")
@@ -65,6 +73,24 @@ class SandboxManager:
             sandbox = self._create_e2b_sandbox(task_id, timeout, extra_envs)
         else:
             sandbox = self._create_local_sandbox(task_id, timeout)
+
+        effective_repo = repo_url or self.config.repo_url
+        effective_branch = branch if branch is not None else self.config.branch
+        effective_token = clone_token if clone_token is not None else self.config.clone_token
+
+        if not skip_setup and effective_repo:
+            setup_result = sandbox.setup(
+                repo_url=effective_repo,
+                branch=effective_branch,
+                clone_token=effective_token,
+            )
+            if setup_result.get("status") != "success":
+                msg = setup_result.get("message", "setup failed")
+                try:
+                    sandbox.destroy()
+                except Exception as exc:
+                    logger.warning(f"Cleanup after failed setup: {exc}")
+                raise SandboxCreationError(f"Sandbox setup failed: {msg}")
 
         with self._lock:
             self._sandboxes[task_id] = sandbox

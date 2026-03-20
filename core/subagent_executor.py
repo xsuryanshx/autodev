@@ -98,10 +98,15 @@ class SubagentExecutor:
         )
 
         sandbox: Optional[SandboxBackend] = None
+        meta = task.metadata or {}
         try:
             sandbox = self._sandbox_manager.create_sandbox(
                 task_id=task.task_id,
                 timeout_seconds=timeout,
+                repo_url=meta.get("repo_url"),
+                branch=meta.get("branch"),
+                clone_token=meta.get("clone_token"),
+                skip_setup=bool(meta.get("skip_setup")),
             )
             task_ctx.tools = sandbox
         except Exception as e:

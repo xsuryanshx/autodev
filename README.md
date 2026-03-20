@@ -159,7 +159,7 @@ autodev/
 │       ├── feature-list-schema.md   # Task tracking schema
 │       ├── shared-state-protocol.md # Multi-agent coordination
 │       └── merge-strategy.md        # Branch merging protocol
-├── tests/                           # 97 tests
+├── tests/                           # 100+ tests
 │   ├── test_sandboxed_tools.py      # Local sandbox tests (env, command blocking)
 │   ├── test_e2b_sandbox.py          # E2B sandbox tests (mocked SDK)
 │   ├── test_sandbox_manager.py      # Lifecycle manager tests
@@ -308,12 +308,53 @@ config = SandboxConfig.from_file(".autodev/config.json")
 executor = SubagentExecutor(workspace="/tmp/ws", sandbox_config=config)
 ```
 
+### CLI (`python -m core`)
+
+From the plugin root, with `PYTHONPATH` set to that directory (or run from the repo root):
+
+```bash
+export PYTHONPATH="$(pwd)"
+
+# Run tasks from JSON (tasks file + optional flags)
+python -m core run \
+  --workspace /path/to/repo/.autodev/workspaces \
+  --backend local \
+  --repo https://github.com/owner/repo.git \
+  --branch main \
+  --tasks .autodev/tasks.json \
+  --output .autodev/driver-results.json
+
+# Merge a full driver config file
+python -m core run --config .autodev/driver-config.json --output .autodev/driver-results.json
+
+# E2B warm snapshot (requires E2B_API_KEY)
+python -m core snapshot --repo https://github.com/owner/repo.git --branch main --output .autodev/e2b-snapshot.json
+
+# In-process sandbox tracking note
+python -m core status
+```
+
+### JSON driver (`core/driver.py`)
+
+Pipe JSON on stdin or use `--config`:
+
+```bash
+python -m core.driver --config .autodev/driver-config.json --output .autodev/driver-results.json
+cat .autodev/driver-config.json | python -m core.driver -o .autodev/driver-results.json
+```
+
+### Claude Code integration
+
+- **Slash command:** [commands/autodev.md](commands/autodev.md) Phase 5 — driver JSON + `python -m core run`.
+- **Skill:** [skills/autodev/parallel-sandbox-executor.md](skills/autodev/parallel-sandbox-executor.md) — dispatch procedure and result handling.
+- **Backend registry:** [skills/autodev/agent-backend.md](skills/autodev/agent-backend.md) — `sandbox` backend alongside OpenCode.
+
 ---
 
 ## Running Tests
 
 ```bash
-# Run the full test suite (97 tests)
+# Run the full test suite
 python -m pytest tests/ -v
 
 # Run only sandbox tests

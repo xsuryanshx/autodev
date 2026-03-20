@@ -285,68 +285,124 @@ Critical rules:
 
 ## Phase 5: Dispatch Parallel Subagents
 
-**Goal:** Implement each feature concurrently using subagent tasks dispatched via `task()` tool.
+**Goal:** Implement each feature concurrently using the sandbox executor. Target any repository and branch by passing `repo_url` / `branch` in the driver config (local or E2B backend).
+
+### Prerequisites
+
+- Python 3.10+ with `pip install -r requirements.txt` in the AutoDev plugin directory (the folder containing `core/`).
+- From Bash, set `PYTHONPATH` to the plugin root so `core` and `agents` import correctly:
+  ```
+  export PYTHONPATH="/absolute/path/to/autodev-plugin-root"
+  ```
 
 ### Steps
 
-1. **Initialize the SubagentExecutor**
+1. **Build a driver JSON config** from `.autodev/feature_list.json` and the target repository.
 
-   ```python
-   from core.subagent_executor import SubagentExecutor
+   Write a file e.g. `.autodev/driver-config.json` (or `/tmp/autodev_driver_{issue_number}.json`):
 
-   executor = SubagentExecutor(
-       workspace=str(Path(repo_path) / ".autodev" / "workspaces"),
-       max_parallelism=3,
-       timeout_per_task=900,  # 15 minutes
-   )
+   ```json
+   {
+     "workspace": "/path/to/target/repo/.autodev/workspaces",
+     "max_parallelism": 3,
+     "timeout_per_task": 900,
+     "sandbox": {
+       "backend": "local",
+       "repo_url": "https://github.com/owner/target-repo.git",
+       "branch": "main",
+       "clone_token": "${GITHUB_TOKEN}"
+     },
+     "tasks": [
+       {
+         "task_id": "feat-1",
+         "description": "Short title",
+         "prompt": "Full instructions from feature_list subtasks...",
+         "skill": "coder",
+         "metadata": { "repo_url": "https://github.com/owner/target-repo.git", "branch": "autodev/feat-1-user-auth" }
+       }
+       ]
+   }
    ```
 
-2. **Register skill handlers**
+   - **`sandbox.repo_url` / `sandbox.branch`:** clone + install deps inside each sandbox when set (omit for empty local workspaces / tests).
+   - **Per-task `metadata.repo_url` / `metadata.branch` / `metadata.skip_setup`:** override or skip setup for a single task.
+   - **E2B:** set `"backend": "e2b"`, `"e2b_template": "base"`, and ensure `E2B_API_KEY` is in the environment.
 
-   ```python
-   from agents.subagent_handlers import CoderHandler, ResearcherHandler
+2. **Run the driver via CLI (recommended)**
 
-   executor.register_handler("coder", CoderHandler().execute)
-   executor.register_handler("researcher", ResearcherHandler().execute)
+   From the plugin root (where `core/` lives), with `PYTHONPATH` set:
+
+   ```bash
+   python -m core run \
+     --config .autodev/driver-config.json \
+     --output .autodev/driver-results.json
    ```
 
-3. **For each feature, dispatch a task via task() tool**
+   Or pass flags without a config file:
 
-   Use the `task()` tool for each feature:
-
-   ```
-   task(
-     description="Implement JWT authentication feature",
-     prompt="Implement JWT middleware for auth. Read CLAUDE.md first. Subtasks: ...",
-     skill="coder",
-     context={"repo_path": "/path/to/repo"}
-   )
-   ```
-
-   Collect the returned task_ids:
-   ```
-   task_ids = ["feat-1", "feat-2", "feat-3"]
+   ```bash
+   python -m core run \
+     --workspace /path/to/repo/.autodev/workspaces \
+     --backend local \
+     --repo https://github.com/owner/repo.git \
+     --branch main \
+     --tasks .autodev/tasks.json \
+     --output .autodev/driver-results.json
    ```
 
-4. **Wait for all tasks to complete**
+   `tasks.json` format:
 
+   ```json
+   { "tasks": [
+     { "task_id": "feat-1", "description": "...", "prompt": "...", "skill": "coder" }
+   ] }
    ```
-   results = wait_for_tasks(task_ids)
+
+3. **Alternative: stdin JSON + `core.driver` module**
+
+   ```bash
+   python -m core.driver --config .autodev/driver-config.json --output .autodev/driver-results.json
    ```
 
-5. **Process results**
+   Or pipe JSON on stdin (no `--config`):
 
-   For each result in results:
-   - If status == "completed": update feature_list.json
-   - If status == "failed" or "timeout": mark feature as failed, note error
-   - Aggregate files_created and files_modified for merge phase
+   ```bash
+   cat .autodev/driver-config.json | python -m core.driver --output .autodev/driver-results.json
+   ```
+
+4. **Parse results**
+
+   Read `.autodev/driver-results.json`. Schema:
+
+   - `results[]`: `task_id`, `status` (`completed` | `failed` | `timeout`), `output`, `error`, `files_created`, `files_modified`, `duration_seconds`
+   - `summary`: `total`, `completed`, `failed`, `total_duration_seconds`
+   - Exit code: `0` if no failed tasks, `1` otherwise.
+
+5. **Process results for merge phase**
+
+   For each entry in `results`:
+   - If `status == "completed"`: update `feature_list.json` for that feature
+   - If `failed` or `timeout`: mark feature failed, record `error`
+   - Aggregate `files_created` / `files_modified` for Phase 6
+
+6. **Warm E2B snapshot (optional, one-time per repo)**
+
+   ```bash
+   export E2B_API_KEY=...
+   python -m core snapshot \
+     --repo https://github.com/owner/repo.git \
+     --branch main \
+     --output .autodev/e2b-snapshot.json
+   ```
+
+   Put returned `snapshot_id` into `.autodev/config.json` under `sandbox.e2b_snapshot_id` for faster task sandboxes.
 
 ### Concurrency Rules
 
-- Maximum 3 concurrent subagents per AutoDev session
-- 15-minute timeout per subagent task
-- Tasks run in isolated workspace directories
-- Subagents coordinate via shared agent-state.json
+- Maximum 3 concurrent subagents per session (`max_parallelism`)
+- 15-minute default timeout per task (`timeout_per_task`)
+- Sandboxes: local path-checked workspaces or E2B microVMs; coordinate via `.autodev/agent-state.json`
+- Skill reference: `skills/autodev/parallel-sandbox-executor.md`
 
 ---
 
