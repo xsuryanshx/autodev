@@ -34,6 +34,138 @@ Critical rules:
 - ALWAYS validate issues before changing code — reproduce bugs first
 - Use worktrees for parallel agent isolation
 - Track state in `.autodev/` directory
+- **ASK QUESTIONS FIRST** — understand the issue deeply before implementing
+
+---
+
+## Phase 0: Requirements Clarification
+
+**Goal:** Understand the issue deeply before writing any code. This is a **hard gate** — no implementation until you understand the purpose, constraints, and success criteria.
+
+**Inspired by:** superpowers:brainstorming skill — one question at a time, multiple choice preferred, understand before proposing.
+
+### Principles
+
+1. **One question per message** — don't overwhelm with multiple questions
+2. **Multiple choice preferred** — easier for users to answer
+3. **Focus on three axes:**
+   - **Purpose** — What is this supposed to do? Why?
+   - **Constraints** — Any technical limits? Existing patterns to follow?
+   - **Success criteria** — How will we know it's done?
+4. **Propose approaches after understanding** — never jump straight to implementation
+
+### Question Sequence
+
+Start with a **diagnostic question** to understand context:
+
+```
+I've received this issue:
+
+**{issue_title}**
+{issue_body}
+
+Before I start implementing, I have a few questions to make sure I understand this correctly:
+
+**Q1: What is the primary goal of this change?**
+A) Fix a bug (something isn't working)
+B) Add new functionality (something is missing)
+C) Improve existing functionality (make it better)
+D) Refactor (improve structure without changing behavior)
+```
+
+Based on the answer, follow up with targeted questions:
+
+**If A (Bug):**
+```
+Q2: What is the expected behavior vs actual behavior?
+[User describes]
+
+Q3: What error message or crash occurs? (if any)
+[User describes]
+
+Q4: What are the reproduction steps?
+[User describes]
+OR
+Q4: Can you describe the environment? (browser, OS, language version, etc.)
+[User describes]
+```
+
+**If B (New functionality):**
+```
+Q2: Who will use this feature and why?
+[User describes]
+
+Q3: What should happen when it's working? (success scenario)
+[User describes]
+
+Q4: Are there any constraints I should know about?
+A) Must integrate with existing {X} system
+B) Must follow {language/framework} patterns
+C) Performance is critical — needs to handle {N} requests/second
+D) No specific constraints
+```
+
+**If C (Improve):**
+```
+Q2: What specifically should be improved?
+[User describes]
+
+Q3: Why is the current approach insufficient?
+[User describes]
+
+Q4: What would better look like?
+[User describes]
+```
+
+**If D (Refactor):**
+```
+Q2: What code needs refactoring?
+[User describes]
+
+Q3: Why does it need refactoring?
+A) Hard to maintain / understand
+B) Performance issues
+C) Security concerns
+D) Technical debt accumulation
+```
+
+### Propose Approaches
+
+After understanding, propose 2-3 approaches with trade-offs:
+
+```
+Based on your answers, here are 2-3 ways I could approach this:
+
+**Option A: [Name]**
+Pros: [benefit 1], [benefit 2]
+Cons: [downside 1]
+Best if: [when to use this]
+
+**Option B: [Name]**
+Pros: [benefit 1]
+Cons: [downside 1], [downside 2]
+Best if: [when to use this]
+
+**My recommendation:** Option A because [reasoning]
+
+Which approach would you prefer?
+```
+
+### Exit Criteria
+
+**Do NOT proceed to Phase 1 until you have:**
+- [ ] Classified the issue type (bug/feature/improvement/refactor)
+- [ ] Understood the expected behavior or desired outcome
+- [ ] Identified any constraints (technical, performance, integration)
+- [ ] Confirmed success criteria
+- [ ] User has approved the approach (or explicitly said "just do it")
+
+### If User Says "Just Do It"
+
+If the user is impatient and says "just do it" or similar:
+- Acknowledge: "I'll proceed with reasonable defaults, but may ask clarifying questions if I get stuck"
+- Still ask the most critical question (usually: bug vs feature vs improvement)
+- Document any assumptions in the feature list
 
 ---
 
