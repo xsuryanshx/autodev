@@ -355,57 +355,54 @@ Critical rules:
 
 ## Phase 6: Merge Results
 
-**Goal:** Combine all feature branches into a unified branch and validate.
+**Goal:** Combine all subagent results into a unified branch.
 
 ### Steps
 
-1. **Read merge strategy**
-   ```
-   Read: skills/autodev/references/merge-strategy.md
-   Follow the protocol defined there
+1. **Aggregate all files from subagent results**
+
+   ```python
+   all_created = []
+   all_modified = []
+   for result in results:
+       all_created.extend(result.files_created)
+       all_modified.extend(result.files_modified)
    ```
 
-2. **Checkout unified branch**
-   ```
-   Bash: git checkout autodev/issue-{N}
+2. **Copy all modified files to main worktree**
+
+   Each subagent's workspace is at `.autodev/workspaces/task_{task_id}/`
+   Copy files that were created or modified:
+
+   ```python
+   import shutil
+   from pathlib import Path
+
+   workspaces = Path(repo_path) / ".autodev" / "workspaces"
+   for result in results:
+       task_workspace = workspaces / f"task_{result.task_id}"
+       for f in result.files_created + result.files_modified:
+           src = task_workspace / f
+           if src.exists():
+               dst = Path(repo_path) / f
+               dst.parent.mkdir(parents=True, exist_ok=True)
+               shutil.copy2(src, dst)
    ```
 
-3. **For each completed feature branch:**
-   ```
-   Bash: git merge autodev/{feat-id}-{slug} --no-ff -m "Merge feature: {feat-id}"
+3. **Run full test suite**
+
+   ```bash
+   pytest tests/ -v
    ```
 
-4. **Handle merge conflicts**
-   ```
-   If merge conflict occurs:
-   a. Identify conflicting files
-   b. Attempt auto-resolution:
-      - For text conflicts: use git mergetool or manually resolve
-      - For logic conflicts: analyze both sides, pick correct implementation
-   c. If cannot resolve: report to user with conflict details
-   d. After resolution: git add resolved files, git commit
-   ```
+4. **Handle conflicts**
 
-5. **Run full test suite**
-   ```
-   Bash: run project test suite (pytest, npm test, etc.)
-   ```
+   If tests fail due to conflicting changes to the same file:
+   - Identify which subagents modified the same file
+   - Dispatch a reconciliation subagent to merge the changes
+   - Re-run tests
 
-6. **If tests fail:**
-   ```
-   a. Analyze test failures
-   b. Dispatch coder agent to fix issues
-      - Use unified branch (no worktree needed for fixes)
-      - Max 2 retries
-   c. Re-run tests after each fix attempt
-   d. If still failing after 2 retries: report to user
-   ```
-
-7. **Update progress file**
-   ```
-   Edit: .autodev/autodev-progress.txt
-   Update status: MERGED, note any issues
-   ```
+5. **Update progress file**
 
 ---
 
