@@ -155,18 +155,32 @@ autodev/
 
 ## Installation
 
-AutoDev is installed as a Claude Code plugin:
+### For Your Own Use (Local Plugin)
+
+AutoDev runs as a Claude Code plugin. To use it locally:
 
 ```bash
-# Clone the repository
-git clone https://github.com/suryanshrawat/autodev.git
+# 1. Create a symlink in the plugins directory
+mkdir -p ~/.claude/plugins/cache/local
+ln -sfn /path/to/autodev ~/.claude/plugins/cache/local/autodev
 
-# Navigate to the plugin directory
-cd autodev
+# 2. Enable the plugin in settings.json (~/.claude/settings.json)
+# Add to "enabledPlugins":
+"autodev@local": true
 
-# The plugin is auto-discovered by Claude Code
-# Run the command:
+# 3. Reload plugins
+/reload-plugins
+
+# 4. Run the command from any project
+cd ~/projects/my-project
 /autodev https://github.com/owner/repo/issues/123
+```
+
+**For development/testing** — use the `--plugin-dir` flag to load the plugin directly:
+
+```bash
+claude --plugin-dir /path/to/autodev
+/autodev Add feature description
 ```
 
 ### Requirements
