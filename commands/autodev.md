@@ -483,6 +483,28 @@ If the user is impatient and says "just do it" or similar:
    Update status for each feature based on agent results
    ```
 
+### Load Backend from Config
+
+Read `.autodev/config.json` to determine which backend to use:
+
+```json
+{
+  "backend": "opencode"
+}
+```
+
+Load the corresponding executor skill:
+- `"opencode"` → `skills/autodev/opencode-executor.md`
+- `"claude-code"` → (future) `skills/autodev/claude-executor.md`
+
+### Execute with Backend
+
+The executor handles:
+- Worktree creation (with proper push-to-origin sequence)
+- Background agent spawning
+- Retry with learnings
+- Error persistence to `.autodev/error-history.json`
+
 ---
 
 ## Phase 6: Merge Results
