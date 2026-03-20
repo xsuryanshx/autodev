@@ -208,3 +208,47 @@ if other_claimed_files & my_planned_files:
 # Claim my files
 post_claim(f"I'm modifying: {', '.join(my_planned_files)}")
 ```
+
+## Thread-Safe Coordination
+
+When using the parallel subagent executor (ThreadPoolExecutor), the shared state protocol must handle concurrent reads and writes safely.
+
+### Thread-Safety Rules
+
+1. **Use atomic read-modify-write**: Always read the full file, modify in memory, write back atomically
+2. **Use file locking** for writes: Use a lock file `.autodev/agent-state.json.lock`
+3. **Append-only messages**: Never delete or modify existing messages
+4. **Optimistic reads for agents**: Agents can read state without locking; conflicts are resolved at merge time
+
+### Lock File Protocol
+
+Before writing to agent-state.json:
+```bash
+# Acquire lock
+flock .autodev/agent-state.json.lock -c "atomic update"
+```
+
+Python implementation:
+```python
+import fcntl
+
+def atomic_write_state(state_path: Path, update_fn):
+    lock_path = state_path.with_suffix(".json.lock")
+    with open(lock_path, "w") as lock_file:
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        try:
+            state = json.loads(state_path.read_text())
+            state = update_fn(state)
+            state_path.write_text(json.dumps(state, indent=2))
+        finally:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+```
+
+### Subagent Claim Protocol
+
+When running in threads, claims are made to the shared state file:
+```
+POST claim: {from: "task-1", type: "claim", content: "Modifying: src/auth.py"}
+```
+
+Each subagent should post a claim before starting and a done message when complete.
