@@ -142,3 +142,32 @@ When you complete your research:
 - **Cite sources**: Always include links to documentation and references.
 - **Code snippets**: When providing code, ensure it's complete and production-ready.
 - **No assumptions**: If you cannot find reliable information, say so and suggest what to try next.
+
+## Web Search with Tavily
+
+For technical questions, errors, and API research, use Tavily search:
+
+```python
+import os
+import requests
+
+def tavily_search(query: str, api_key: str = None) -> dict:
+    """Search web using Tavily API."""
+    api_key = api_key or os.environ.get("TAVILY_API_KEY")
+
+    response = requests.post(
+        "https://api.tavily.com/search",
+        json={
+            "query": query,
+            "api_key": api_key,
+            "max_results": 5
+        }
+    )
+
+    return response.json()
+```
+
+When researcher encounters an error it cannot resolve locally:
+1. Call `tavily_search(error_message)` to get relevant web results
+2. Synthesize findings from top 3 results
+3. Include URL references in research output
