@@ -1,4 +1,5 @@
 import pytest
+import threading
 from core.task_context import TaskContext, task_scope
 
 class TestTaskContext:
@@ -39,6 +40,21 @@ class TestTaskContext:
         assert "task-1" in summary
         assert "auth.py" in summary
 
+    def test_task_has_prompt_and_context(self):
+        ctx = TaskContext(
+            task_id="task-1",
+            description="Implement feature",
+            prompt="Do the thing",
+            context={"repo_path": "/tmp"},
+        )
+        assert ctx.prompt == "Do the thing"
+        assert ctx.context == {"repo_path": "/tmp"}
+
+    def test_task_prompt_defaults_to_empty(self):
+        ctx = TaskContext(task_id="task-1", description="Minimal")
+        assert ctx.prompt == ""
+        assert ctx.context is None
+
 
 class TestTaskScope:
     def test_task_scope_sets_current_context(self):
@@ -60,3 +76,26 @@ class TestTaskScope:
             with pytest.raises(RuntimeError, match="Nested task_scope"):
                 with task_scope(ctx2):
                     pass
+
+    def test_concurrent_task_scopes_in_different_threads(self):
+        """Two threads can each have their own task_scope concurrently."""
+        results = {}
+        barrier = threading.Barrier(2)
+
+        def run_in_scope(task_id):
+            ctx = TaskContext(task_id=task_id, description=f"Thread {task_id}")
+            with task_scope(ctx):
+                from core.task_context import get_current_task_context
+                barrier.wait(timeout=2)  # Ensure both threads are inside scope
+                current = get_current_task_context()
+                results[task_id] = current.task_id
+
+        t1 = threading.Thread(target=run_in_scope, args=("thread-1",))
+        t2 = threading.Thread(target=run_in_scope, args=("thread-2",))
+        t1.start()
+        t2.start()
+        t1.join(timeout=5)
+        t2.join(timeout=5)
+
+        assert results["thread-1"] == "thread-1"
+        assert results["thread-2"] == "thread-2"

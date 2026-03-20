@@ -1,55 +1,55 @@
 # AutoDev — Autonomous Coding Harness
 
-AutoDev is a [Claude Code](https://claude.ai/code) plugin that autonomously implements GitHub issues and feature requests. Given a repository and an issue, AutoDev validates the problem, decomposes work into parallel tasks, implements each feature in isolated git worktrees, and delivers a branch ready for human review.
-
-**No Python required.** AutoDev runs as a Claude Code plugin — it coordinates multiple Claude Code agent sessions to do the work.
+AutoDev is a [Claude Code](https://claude.ai/code) plugin that autonomously implements GitHub issues and feature requests. Given a repository and an issue, AutoDev validates the problem, decomposes work into parallel tasks, implements each feature in sandboxed environments, and delivers a branch ready for human review.
 
 ---
 
 ## Architecture Overview
 
-AutoDev is a **Claude Code plugin**, not a Python application. There is no separate server or orchestrator process. The plugin uses Claude Code's built-in agent dispatch system to run multiple agents in parallel, each in its own git worktree.
+AutoDev runs as a Claude Code plugin. The lead agent orchestrates the 8-phase pipeline, dispatching parallel subagents via a `ThreadPoolExecutor`. Each subagent runs in an isolated sandbox — either a local path-checked workspace or an [E2B](https://e2b.dev) cloud microVM.
 
 ```
                     ┌─────────────────────────────────────┐
-                    │           /autodev                  │
+                    │           /autodev                   │
                     │     (Claude Code Plugin Command)     │
                     └─────────────────┬───────────────────┘
                                       │
-              ┌───────────────────────┼───────────────────────┐
-              ▼                       ▼                       ▼
-     ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-     │  Initiator      │     │  Coder Agent 1  │     │  Coder Agent N  │
-     │  (Phase 1-4)    │     │  (Worktree 1)   │     │  (Worktree N)   │
-     │                 │     │                 │     │                 │
-     │ - Parse issue   │     │ - Implement     │     │ - Implement     │
-     │ - Validate      │     │   feat-1        │     │   feat-N        │
-     │ - Explore       │     │ - Write tests   │     │ - Write tests   │
-     │ - Create plan   │     │ - Run tests     │     │ - Run tests     │
-     └─────────────────┘     └─────────────────┘     └─────────────────┘
-              │                       │                       │
-              │                       ▼                       ▼
-              │              ┌─────────────────────────────────┐
-              │              │   .autodev/feature_list.json   │
-              │              │   (Shared task state)         │
-              │              └─────────────────────────────────┘
-              │                       │
-              ▼                       ▼
-     ┌─────────────────────────────────────────────────────────────────┐
-     │                     Phase 6-8                                   │
-     │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐         │
-     │  │    Merge     │  │   Reviewer   │  │    Report    │         │
-     │  │  (unified    │─▶│   (quality   │─▶│  (push to    │         │
-     │  │   branch)    │  │    gate)     │  │   fork)      │         │
-     │  └──────────────┘  └──────────────┘  └──────────────┘         │
-     └─────────────────────────────────────────────────────────────────┘
+                         ┌────────────┴────────────┐
+                         │    SubagentExecutor      │
+                         │   (ThreadPoolExecutor)   │
+                         │    max_parallelism=3     │
+                         └────────────┬────────────┘
+                                      │
+                         ┌────────────┴────────────┐
+                         │    SandboxManager        │
+                         │  (lifecycle, snapshots)  │
+                         └──┬──────────┬──────────┬┘
+                            │          │          │
+                   ┌────────▼──┐ ┌─────▼─────┐ ┌──▼────────┐
+                   │ Sandbox 1 │ │ Sandbox 2 │ │ Sandbox 3 │
+                   │ (feat-1)  │ │ (feat-2)  │ │ (feat-3)  │
+                   └───────────┘ └───────────┘ └───────────┘
+                        │              │              │
+              ┌─────────┴──────────────┴──────────────┴─────────┐
+              │  Backend: "local" (path-checked subprocess)     │
+              │       OR: "e2b"  (Firecracker microVM)          │
+              └─────────────────────────────────────────────────┘
                                       │
                                       ▼
-                            ┌─────────────────┐
-                            │  Branch URL     │
-                            │  (human review) │
-                            └─────────────────┘
+                        ┌─────────────────────────┐
+                        │   Merge → Review → Push │
+                        │   (unified branch)      │
+                        └─────────────────────────┘
 ```
+
+### Sandbox Backends
+
+| Backend | Isolation Level | Latency | Cost | Best For |
+|---------|----------------|---------|------|----------|
+| `local` | Path-checking + env sanitization + command blocklist | Zero (local subprocess) | Free | Development, trusted agents |
+| `e2b` | Full kernel isolation (Firecracker microVM) | ~200ms boot | ~$0.05/hr/vCPU | Production, untrusted code, scaling beyond local |
+
+---
 
 ## How It Works — 8 Phases
 
@@ -69,7 +69,7 @@ Before writing any code, AutoDev confirms the issue is real:
 - **Feature requests:** Skip validation (no bug to reproduce)
 - **Questions:** Mark as `NEEDS_INFO`, stop — a human needs to clarify
 
-If AutoDev cannot reproduce a bug and cannot find related code, it reports the issue as invalid and makes no changes.
+If AutoDev cannot reproduce a bug or find related code, it reports the issue as invalid and makes no changes.
 
 ### Phase 3: Explore Codebase
 
@@ -95,25 +95,24 @@ feat-2: JWT middleware
   └── sub-3: Integration tests
 ```
 
-AutoDev creates one git worktree per feature branch.
-
 ### Phase 5: Parallel Implementation
 
-Each feature is implemented in parallel by a separate Coder agent, each in its own isolated git worktree. Agents coordinate through shared state files to avoid stepping on each other.
+Each feature is dispatched to a sandboxed subagent via the `SubagentExecutor`:
 
-For each feature:
-1. Implement subtasks
-2. Write tests
-3. Run test suite
-4. Commit changes with descriptive messages
+1. `SandboxManager` creates an isolated sandbox per task (local dir or E2B VM)
+2. The sandbox is bootstrapped with the repo clone and dependencies
+3. The `CoderHandler` implements subtasks, writes tests, runs the test suite
+4. Results are collected and the sandbox is torn down
+
+Up to 3 subagents run concurrently with a 15-minute timeout per task.
 
 ### Phase 6: Merge Results
 
-AutoDev merges all feature branches into a unified branch (`autodev/issue-{N}`):
-1. Merge each feature branch sequentially
-2. Handle any merge conflicts
+AutoDev aggregates files from all subagent workspaces into the unified branch:
+1. Collect created/modified files from each sandbox
+2. Copy to the main working tree
 3. Run the full test suite
-4. Fix regressions if they occur
+4. Handle conflicts if multiple agents modified the same file
 
 ### Phase 7: Review
 
@@ -127,59 +126,76 @@ Returns structured verdict: `APPROVED` or `CHANGES_REQUESTED`.
 
 ### Phase 8: Report
 
-AutoDev pushes the unified branch to your fork and provides the branch URL. **It never creates a PR automatically.** You review the branch and create the PR yourself.
+AutoDev pushes the unified branch to your fork and provides the branch URL. **It never creates a PR automatically.** You review the changes and create the PR yourself.
 
 ---
 
-## Plugin Structure
+## Project Structure
 
 ```
 autodev/
 ├── .claude-plugin/
-│   └── plugin.json          # Plugin manifest
+│   └── plugin.json                  # Plugin manifest
 ├── commands/
-│   └── autodev.md           # /autodev command (8 phases)
+│   └── autodev.md                   # /autodev command (8 phases)
 ├── agents/
-│   ├── coder.md             # Coder agent skill
-│   ├── researcher.md         # Researcher agent (on-demand)
-│   └── reviewer.md          # Reviewer agent (quality gate)
-└── skills/autodev/references/
-    ├── harness-principles.md      # Core operational rules
-    ├── issue-validation.md        # Pre-implementation validation
-    ├── feature-list-schema.md     # Task tracking schema
-    ├── shared-state-protocol.md   # Multi-agent coordination
-    └── merge-strategy.md          # Branch merging protocol
+│   ├── coder.md                     # Coder agent skill
+│   ├── researcher.md                # Researcher agent (on-demand)
+│   ├── reviewer.md                  # Reviewer agent (quality gate)
+│   ├── subagent.md                  # Subagent skill definition
+│   └── subagent_handlers.py         # CoderHandler, ResearcherHandler
+├── core/
+│   ├── sandbox_backend.py           # SandboxBackend protocol, SandboxConfig, ToolResult
+│   ├── sandboxed_tools.py           # Local sandbox (path-checked, env-sanitized)
+│   ├── e2b_sandbox.py               # E2B cloud sandbox (Firecracker microVM)
+│   ├── sandbox_manager.py           # Lifecycle manager (create, track, snapshot, destroy)
+│   ├── subagent_executor.py         # ThreadPoolExecutor-based dispatcher
+│   └── task_context.py              # Per-task context isolation via ContextVar
+├── skills/autodev/
+│   ├── task_tool.md                 # task() tool specification
+│   └── references/
+│       ├── harness-principles.md    # Core operational rules
+│       ├── issue-validation.md      # Pre-implementation validation
+│       ├── feature-list-schema.md   # Task tracking schema
+│       ├── shared-state-protocol.md # Multi-agent coordination
+│       └── merge-strategy.md        # Branch merging protocol
+├── tests/                           # 97 tests
+│   ├── test_sandboxed_tools.py      # Local sandbox tests (env, command blocking)
+│   ├── test_e2b_sandbox.py          # E2B sandbox tests (mocked SDK)
+│   ├── test_sandbox_manager.py      # Lifecycle manager tests
+│   ├── test_subagent_executor.py    # Executor concurrency tests
+│   ├── test_task_context.py         # ContextVar isolation tests
+│   ├── test_subagent_handlers.py    # Handler tests
+│   ├── test_parallel_subagent_integration.py
+│   └── test_e2e_executor.py         # Full pipeline E2E tests
+└── requirements.txt                 # e2b>=1.2.0, pytest>=7.0.0
 ```
 
 ---
 
 ## Installation
 
-AutoDev is installed as a Claude Code plugin:
-
 ```bash
-# Clone the repository
 git clone https://github.com/suryanshrawat/autodev.git
-
-# Navigate to the plugin directory
 cd autodev
 
-# The plugin is auto-discovered by Claude Code
-# Run the command:
-/autodev https://github.com/owner/repo/issues/123
+# Install Python dependencies
+pip install -r requirements.txt
 ```
 
 ### Requirements
 
+- Python 3.10+
 - [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) installed and authenticated
 - GitHub CLI (`gh`) authenticated: `gh auth login`
 - A target repository with write access (for pushing to fork)
+- **For E2B backend:** An [E2B account](https://e2b.dev) and API key
 
 ---
 
 ## Usage
 
-### Basic Usage
+### As a Claude Code Plugin
 
 ```bash
 # From a GitHub issue URL
@@ -189,15 +205,183 @@ cd autodev
 /autodev Add rate limiting to all API endpoints
 ```
 
-### Workflow
+### Running the Executor Directly (Python)
 
-1. **Invoke** `/autodev` with an issue URL or feature description
-2. **AutoDev validates** the issue (runs tests, tries to reproduce bugs)
-3. **AutoDev explores** the codebase and creates a task plan
-4. **AutoDev implements** each feature in parallel worktrees
-5. **AutoDev merges** results and runs the full test suite
-6. **AutoDev reviews** code quality
-7. **AutoDev reports** with a branch URL — you create the PR
+#### Local Backend (default)
+
+```python
+from core.subagent_executor import SubagentExecutor, SubagentTask
+from agents.subagent_handlers import CoderHandler
+
+executor = SubagentExecutor(
+    workspace="/tmp/autodev-workspace",
+    max_parallelism=3,
+    timeout_per_task=900,
+)
+executor.register_handler("coder", CoderHandler().execute)
+
+tasks = [
+    SubagentTask(
+        task_id="feat-1",
+        description="Implement user auth",
+        prompt="Create JWT middleware in src/auth.py with tests",
+        skill="coder",
+        context={"repo_path": "/path/to/repo"},
+    ),
+    SubagentTask(
+        task_id="feat-2",
+        description="Add rate limiting",
+        prompt="Add rate limiting middleware with Redis backend",
+        skill="coder",
+    ),
+]
+
+results = executor.submit_and_wait(tasks)
+for r in results:
+    print(f"{r.task_id}: {r.status} ({r.duration_seconds:.1f}s)")
+
+executor.shutdown()
+```
+
+#### E2B Backend (cloud sandboxes)
+
+```python
+import os
+from core.sandbox_backend import SandboxConfig
+from core.subagent_executor import SubagentExecutor, SubagentTask
+from agents.subagent_handlers import CoderHandler
+
+config = SandboxConfig(
+    backend="e2b",
+    e2b_template="base",                    # or your custom template ID
+    e2b_api_key=os.environ["E2B_API_KEY"],  # or set E2B_API_KEY env var
+    timeout_seconds=900,
+)
+
+executor = SubagentExecutor(
+    workspace="/tmp/autodev-workspace",
+    max_parallelism=3,
+    sandbox_config=config,
+)
+executor.register_handler("coder", CoderHandler().execute)
+
+# Optional: create a warm snapshot so agents start with repo pre-cloned
+snap_id = executor.sandbox_manager.create_warm_snapshot(
+    repo_url="https://github.com/owner/repo.git",
+    branch="main",
+    clone_token=os.environ.get("GITHUB_TOKEN"),
+)
+print(f"Warm snapshot ready: {snap_id}")
+
+# Dispatch tasks — each gets its own Firecracker microVM
+tasks = [
+    SubagentTask(task_id="feat-1", description="Auth", prompt="...", skill="coder"),
+    SubagentTask(task_id="feat-2", description="API", prompt="...", skill="coder"),
+]
+results = executor.submit_and_wait(tasks)
+
+executor.shutdown()  # Destroys all sandboxes
+```
+
+#### Configuration via JSON File
+
+Create `.autodev/config.json` in your target repo:
+
+```json
+{
+  "sandbox": {
+    "backend": "e2b",
+    "e2b_template": "base",
+    "timeout_seconds": 900,
+    "e2b_auto_pause": true
+  }
+}
+```
+
+Load it:
+
+```python
+from core.sandbox_backend import SandboxConfig
+from core.subagent_executor import SubagentExecutor
+
+config = SandboxConfig.from_file(".autodev/config.json")
+executor = SubagentExecutor(workspace="/tmp/ws", sandbox_config=config)
+```
+
+---
+
+## Running Tests
+
+```bash
+# Run the full test suite (97 tests)
+python -m pytest tests/ -v
+
+# Run only sandbox tests
+python -m pytest tests/test_sandboxed_tools.py tests/test_e2b_sandbox.py -v
+
+# Run only executor/integration tests
+python -m pytest tests/test_subagent_executor.py tests/test_parallel_subagent_integration.py -v
+
+# Run E2E tests (real file I/O, real subprocess execution)
+python -m pytest tests/test_e2e_executor.py -v -s
+```
+
+All E2B tests use a mocked SDK — no API key or network access required.
+
+---
+
+## Sandboxing
+
+### Local Sandbox (`core/sandboxed_tools.py`)
+
+The local backend provides defense-in-depth for running on a developer's machine:
+
+- **Path checking:** `read_file`, `write_file`, `glob`, `grep` are restricted to the task workspace directory via `_check_path()`. Symlink traversal is blocked.
+- **Environment sanitization:** `bash()` runs with a stripped environment that only includes `PATH`, `HOME`, `LANG`, `PYTHONPATH`, and other safe keys. Secrets like `GITHUB_TOKEN`, `AWS_SECRET_ACCESS_KEY` are never passed to subprocesses.
+- **Command blocklist:** Dangerous patterns (`rm -rf /`, `sudo`, `mkfs`, `shutdown`, `reboot`, `dd of=/dev/`, `nc -l`) are rejected before execution.
+- **Timeout:** Every bash command has a configurable timeout (default 300s).
+
+**Limitation:** `bash()` still runs on the host — a sophisticated command can access the filesystem outside the workspace. For true isolation, use E2B.
+
+### E2B Sandbox (`core/e2b_sandbox.py`)
+
+The E2B backend provides hardware-level isolation via Firecracker microVMs:
+
+- **Separate kernel:** Each sandbox runs its own Linux kernel. Container escape is impossible.
+- **Clean filesystem:** No access to host files, secrets, or processes.
+- **Network isolation:** Configurable per-sandbox network policies.
+- **Resource limits:** CPU and RAM are capped per-VM by E2B.
+- **Snapshotting:** Freeze a sandbox with the repo cloned and deps installed, then start future sandboxes from that snapshot in ~1 second.
+- **Auto-cleanup:** Sandboxes auto-kill on timeout. No zombie processes or orphaned workspaces.
+
+### Sandbox Manager (`core/sandbox_manager.py`)
+
+The `SandboxManager` handles the full lifecycle:
+
+```python
+manager = SandboxManager(config)
+
+# Create sandboxes
+sandbox = manager.create_sandbox("task-1")
+
+# Bootstrap with repo
+manager.setup_sandbox("task-1", repo_url="https://github.com/owner/repo.git")
+
+# Track active sandboxes
+print(manager.active_count)
+print(manager.list_sandboxes())
+
+# E2B-specific: pause to stop billing, resume later
+manager.pause_sandbox("task-1")
+manager.resume_sandbox("task-1")
+
+# Create warm snapshot for fast starts
+snap_id = manager.create_warm_snapshot(repo_url="...", branch="main")
+
+# Cleanup
+manager.destroy_sandbox("task-1")
+manager.shutdown()  # Destroys all
+```
 
 ---
 
@@ -215,9 +399,9 @@ For bug reports, AutoDev reproduces the issue before fixing it. If it cannot rep
 
 Task tracking lives in `.autodev/feature_list.json` — a structured JSON file, not markdown. This prevents accidental corruption by LLMs and enables reliable programmatic updates.
 
-### Git Worktree Isolation
+### Sandbox Isolation
 
-Each feature is implemented in a separate git worktree. This isolation prevents parallel agents from interfering with each other and provides clean, auditable branch history.
+Every subagent runs in its own sandbox. On local, this means a separate workspace directory with path-checking and env sanitization. On E2B, this means a full microVM with its own kernel. Agents cannot interfere with each other or the host.
 
 ---
 
@@ -230,8 +414,7 @@ AutoDev creates files in `.autodev/` in the target repository:
 | `.autodev/feature_list.json` | Task tracking — features, subtasks, statuses |
 | `.autodev/agent-state.json` | Multi-agent coordination — claims, messages |
 | `.autodev/autodev-progress.txt` | Human-readable progress log |
-
-These files are committed to the branch alongside the implementation changes.
+| `.autodev/config.json` | Sandbox and execution configuration |
 
 ---
 
@@ -239,7 +422,7 @@ These files are committed to the branch alongside the implementation changes.
 
 ### Coder Agent
 
-Implements features in isolated git worktrees. Reads its assigned feature from `feature_list.json`, implements subtasks, writes tests, and runs the test suite before marking complete.
+Implements features in sandboxed environments. Reads its assigned feature from `feature_list.json`, implements subtasks, writes tests, and runs the test suite before marking complete.
 
 ### Researcher Agent
 
@@ -260,37 +443,13 @@ AutoDev uses a two-level branch structure:
 | `autodev/feat-N-<slug>` | Feature branch per agent |
 | `autodev/issue-{N}` | Unified branch with all features |
 
-Example:
 ```
-main                           # Base branch
-├── autodev/issue-123          # Unified branch (merged features)
-│   ├── autodev/feat-1-user-auth      # Feature 1 branch
-│   ├── autodev/feat-2-jwt-middleware # Feature 2 branch
-│   └── autodev/feat-3-tests          # Feature 3 branch
+main
+├── autodev/issue-123               # Unified branch (merged features)
+│   ├── autodev/feat-1-user-auth    # Feature 1 branch
+│   ├── autodev/feat-2-jwt-middleware
+│   └── autodev/feat-3-tests
 ```
-
----
-
-## Lessons Learned
-
-### Reproduce Before Fixing
-
-Always verify a bug is real before implementing a fix:
-1. Run the existing test suite
-2. Search for error messages in the codebase
-3. Try to follow the reproduction steps
-4. Only then implement the fix
-
-### Test on Simple Issues First
-
-Before tackling complex issues, validate the system works on:
-- Documentation fixes
-- Typo corrections
-- Issues where the fix is clearly defined
-
-### Fork Push Only
-
-AutoDev pushes changes to your fork, never to the upstream repository. This gives you a chance to review before anything reaches the main codebase.
 
 ---
 
@@ -301,7 +460,8 @@ AutoDev pushes changes to your fork, never to the upstream repository. This give
 - [Feature List Schema](skills/autodev/references/feature-list-schema.md) — JSON schema for task tracking
 - [Shared State Protocol](skills/autodev/references/shared-state-protocol.md) — Multi-agent coordination
 - [Merge Strategy](skills/autodev/references/merge-strategy.md) — Branch merging protocol
+- [DeerFlow Architecture Mapping](docs/deerflow_subagents_learnings.md) — How AutoDev's parallel model maps to DeerFlow
 
 ---
 
-*AutoDev is inspired by [OpenAI's Harness Engineering](https://openai.com/index/harness-engineering/) approach to autonomous coding agents.*
+*AutoDev is inspired by [OpenAI's Harness Engineering](https://openai.com/index/harness-engineering/) approach to autonomous coding agents and [DeerFlow's](https://github.com/bytedance/deer-flow) parallel subagent execution model.*

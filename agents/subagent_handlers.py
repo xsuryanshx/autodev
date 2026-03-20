@@ -1,7 +1,6 @@
 """Skill handlers for subagent execution."""
 import logging
-from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 
 from core.task_context import TaskContext
 
@@ -14,9 +13,7 @@ class CoderHandler:
         self.logger.info(f"[{context.task_id}] Starting coder task: {context.description}")
 
         try:
-            task_context = context.context or {}
-            prompt = getattr(context, 'prompt', context.description)
-            result = self._execute_impl(context, prompt, task_context)
+            result = self._execute_impl(context, context.prompt, context.context or {})
             context.set_result(result)
             return result
         except Exception as e:
@@ -41,9 +38,7 @@ class ResearcherHandler:
         self.logger.info(f"[{context.task_id}] Starting researcher task: {context.description}")
 
         try:
-            task_context = context.context or {}
-            prompt = getattr(context, 'prompt', context.description)
-            result = self._research(context, prompt, task_context)
+            result = self._research(context, context.prompt, context.context or {})
             context.set_result(result)
             return result
         except Exception as e:

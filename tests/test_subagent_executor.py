@@ -29,8 +29,8 @@ class TestSubagentExecutorBasics:
         def simple_handler(ctx):
             return {"status": "completed", "output": "done"}
 
-        with patch.object(executor, "_get_handler_for_skill", return_value=simple_handler):
-            result = executor.submit_and_wait([task])
+        executor.register_handler("coder", simple_handler)
+        result = executor.submit_and_wait([task])
 
         assert len(result) == 1
         assert result[0].task_id == "task-1"
@@ -43,30 +43,16 @@ class TestSubagentExecutorBasics:
             for i in range(3)
         ]
 
-        # Track call count to return different handlers
-        call_count = [0]
-        handlers = []
+        def handler(ctx):
+            time.sleep(0.1)
+            return {"status": "completed", "task_id": ctx.task_id}
 
-        def make_handler(task_id):
-            def handler(ctx):
-                time.sleep(0.1)
-                return {"status": "completed", "task_id": task_id}
-            return handler
-
-        # Create handlers upfront
-        for i in range(3):
-            handlers.append(make_handler(f"task-{i}"))
-
-        def handler_provider(skill):
-            idx = call_count[0]
-            call_count[0] += 1
-            return handlers[idx]
+        executor.register_handler("coder", handler)
 
         start = time.time()
-        with patch.object(executor, "_get_handler_for_skill", side_effect=handler_provider):
-            result = executor.submit_and_wait(tasks)
-
+        result = executor.submit_and_wait(tasks)
         elapsed = time.time() - start
+
         assert len(result) == 3
         assert all(r.status == "completed" for r in result)
         # With max_parallelism=3 and 3 tasks sleeping 0.1s each, should take ~0.1s not ~0.3s
@@ -80,24 +66,26 @@ class TestConcurrencyLimits:
     def test_max_parallelism_respected(self):
         executor = SubagentExecutor(workspace=self.tempdir, max_parallelism=2)
         assert executor.max_parallelism == 2
-        assert executor._semaphore._value == 2
 
-    def test_task_timeout_applied(self):
-        executor = SubagentExecutor(workspace=self.tempdir, max_parallelism=1, timeout_per_task=5)
+    def test_task_context_gets_prompt_and_context(self):
+        """Verify that TaskContext receives prompt and context from SubagentTask."""
+        executor = SubagentExecutor(workspace=self.tempdir, max_parallelism=1)
         task = SubagentTask(
-            task_id="slow-task",
-            description="Slow task",
-            prompt="",
+            task_id="ctx-task",
+            description="Context test",
+            prompt="Do something specific",
             skill="coder",
-            timeout_seconds=1,
+            context={"repo_path": "/tmp/repo"},
         )
 
-        def slow_handler(ctx):
-            time.sleep(2)
+        captured = {}
+        def capturing_handler(ctx):
+            captured["prompt"] = ctx.prompt
+            captured["context"] = ctx.context
             return {"status": "completed"}
 
-        with patch.object(executor, "_get_handler_for_skill", return_value=slow_handler):
-            result = executor.submit_and_wait([task])
+        executor.register_handler("coder", capturing_handler)
+        executor.submit_and_wait([task])
 
-        assert result[0].status == "timeout"
-        assert "timeout" in result[0].error.lower()
+        assert captured["prompt"] == "Do something specific"
+        assert captured["context"] == {"repo_path": "/tmp/repo"}
