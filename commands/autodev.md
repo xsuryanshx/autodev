@@ -283,73 +283,117 @@ Critical rules:
 
 ---
 
-## Phase 5: Dispatch Parallel Coder Agents
+## Phase 5: Dispatch Parallel Subagents
 
-**Goal:** Implement each feature in parallel using isolated worktrees.
+**Goal:** Implement each feature concurrently using subagent tasks dispatched via `task()` tool.
 
 ### Steps
 
-1. **Get current agent-state**
-   ```
-   Read: .autodev/agent-state.json
-   ```
+1. **Initialize the SubagentExecutor**
 
-2. **For each feature in feature_list.json:**
+   ```python
+   from core.subagent_executor import SubagentExecutor
 
-   a. **Create feature branch from unified branch**
-      ```
-      Bash: git checkout autodev/issue-{N}
-      Bash: git checkout -b autodev/{feat-id}-{slug}
-      ```
-
-   b. **Prepare agent prompt**
-      Include:
-      ```
-      - Feature description
-      - List of subtasks
-      - Relevant files from Phase 3
-      - Project conventions from CLAUDE.md/AGENTS.md
-      - Current agent-state.json contents
-      - Instructions to:
-        * Implement the feature
-        * Write/update tests
-        * Run tests after implementation
-        * Update feature_list.json with results
-        * Commit changes with descriptive message
-      ```
-
-   c. **Dispatch coder agent**
-      ```
-      Agent:
-        type: coder
-        isolation: worktree
-        prompt: {prepared prompt}
-      ```
-
-   d. **Update agent-state.json**
-      ```json
-      {
-        "dispatched_agents": ["agent-id"],
-        "current_assignments": {
-          "agent-id": {
-            "feature_id": "feat-1",
-            "branch": "autodev/feat-1-descriptive-name"
-          }
-        }
-      }
-      ```
-
-3. **Wait for all agents to complete**
-   ```
-   Monitor agent completion
-   If an agent fails: mark feature as failed, note error
+   executor = SubagentExecutor(
+       workspace=str(Path(repo_path) / ".autodev" / "workspaces"),
+       max_parallelism=3,
+       timeout_per_task=900,  # 15 minutes
+   )
    ```
 
-4. **After all agents complete:**
+2. **Register skill handlers**
+
+   ```python
+   from agents.subagent_handlers import CoderHandler, ResearcherHandler
+
+   executor.register_handler("coder", CoderHandler().execute)
+   executor.register_handler("researcher", ResearcherHandler().execute)
    ```
-   Read: .autodev/feature_list.json
-   Update status for each feature based on agent results
+
+3. **For each feature, dispatch a task via task() tool**
+
+   Use the `task()` tool for each feature:
+
    ```
+   task(
+     description="Implement JWT authentication feature",
+     prompt="Implement JWT middleware for auth. Read CLAUDE.md first. Subtasks: ...",
+     skill="coder",
+     context={"repo_path": "/path/to/repo"}
+   )
+   ```
+
+   Collect the returned task_ids:
+   ```
+   task_ids = ["feat-1", "feat-2", "feat-3"]
+   ```
+
+4. **Wait for all tasks to complete**
+
+   ```
+   results = wait_for_tasks(task_ids)
+   ```
+
+5. **Process results**
+
+   For each result in results:
+   - If status == "completed": update feature_list.json
+   - If status == "failed" or "timeout": mark feature as failed, note error
+   - Aggregate files_created and files_modified for merge phase
+
+### Concurrency Rules
+
+- Maximum 3 concurrent subagents per AutoDev session
+- 15-minute timeout per subagent task
+- Tasks run in isolated workspace directories
+- Subagents coordinate via shared agent-state.json
+
+---
+
+## Phase 5b: Aggregate Results
+
+After `wait_for_tasks()` returns, aggregate all subagent results.
+
+### Steps
+
+1. **Collect all results**
+
+   ```python
+   results = wait_for_tasks(task_ids)
+
+   for i, result in enumerate(results):
+       feature = features[i]
+       if result.status == "completed":
+           feature["status"] = "completed"
+           feature["files_created"] = result.files_created
+           feature["files_modified"] = result.files_modified
+       else:
+           feature["status"] = "failed"
+           feature["error"] = result.error
+   ```
+
+2. **Update feature_list.json**
+
+   ```python
+   # Read-modify-write feature_list.json
+   update_feature_statuses(features)
+   ```
+
+3. **Log progress**
+
+   ```
+   Append to .autodev/autodev-progress.txt:
+   2026-03-20T10:35:00Z [lead] All subagent tasks completed
+   2026-03-20T10:35:01Z [lead] feat-1: completed (3 files created, 2 modified)
+   2026-03-20T10:35:01Z [lead] feat-2: failed (timeout)
+   ```
+
+4. **Handle failures**
+
+   For any failed or timed-out tasks:
+   - Log the error
+   - Mark feature as failed
+   - If time permits, retry once (max 1 retry per failed task)
 
 ---
 
