@@ -26,6 +26,17 @@ autodev/
     └── merge-strategy.md          # Branch merging protocol
 ```
 
+### Agent Backend Interface
+
+AutoDev supports multiple agent backends via a pluggable interface:
+
+| Backend | Skill | Description |
+|---------|-------|-------------|
+| OpenCode | `skills/autodev/opencode-executor.md` | Background agent pool with worktree isolation |
+| Claude Code | (future) `skills/autodev/claude-executor.md` | Claude Code-backed execution |
+
+Backend is configured in `.autodev/config.json` under `backend` field.
+
 ## How to Use
 
 ### Invocation
@@ -159,6 +170,20 @@ Before writing any code, the initiator validates the issue to avoid wasted effor
 | `NEEDS_INFO` | Missing reproduction steps | STOP, request clarification |
 
 **Critical rule:** If you cannot reproduce a bug and cannot find related code, mark it `INVALID`. Do not change code on the assumption that there might be a bug somewhere.
+
+### Background Agents with Worktree Isolation
+
+AutoDev runs multiple agent instances in parallel, each in its own git worktree.
+Background agents are spawned as detached subprocesses in isolated worktrees.
+
+**Worktree creation sequence (from Run #7 lessons):**
+1. Create feature branch
+2. Push to origin (establishes remote tracking)
+3. Create worktree
+4. Spawn background agent
+
+This sequence prevents git lock errors that occur when creating worktrees
+for branches that don't exist on remote yet.
 
 ## Key Conventions
 
