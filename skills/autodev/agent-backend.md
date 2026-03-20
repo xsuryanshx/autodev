@@ -32,17 +32,29 @@ Send a message/prompt to a running agent session.
 **Returns:**
 ```json
 {
-  "status": "completed|failed|running",
+  "status": "completed|failed|running|timeout",
   "output": "agent response...",
   "error": "error message if failed"
 }
 ```
+
+**Note:** All blocking operations should implement timeout handling per the backend config.
 
 ### `backend:kill(agent_id: string) -> void`
 Terminate an agent session and clean up its worktree.
 
 ### `backend:get_status(agent_id: string) -> dict`
 Get current status of an agent session.
+
+**Example return:**
+```json
+{
+  "status": "running",
+  "worktree_path": "/path/to/worktree",
+  "branch": "feat-1",
+  "agent_pid": 12345
+}
+```
 
 ## Backend Discovery
 
