@@ -421,12 +421,28 @@ If the user is impatient and says "just do it" or similar:
 
 ### Steps
 
-1. **Get current agent-state**
+1. **Load backend from config**
+   ```
+   Read: .autodev/config.json
+   ```
+
+   Determine which backend to use:
+   ```json
+   {
+     "backend": "opencode"
+   }
+   ```
+
+   Load the corresponding executor skill:
+   - `"opencode"` → `skills/autodev/opencode-executor.md`
+   - `"claude-code"` → (future) `skills/autodev/claude-executor.md`
+
+2. **Get current agent-state**
    ```
    Read: .autodev/agent-state.json
    ```
 
-2. **For each feature in feature_list.json:**
+3. **For each feature in feature_list.json:**
 
    a. **Create feature branch from unified branch**
       ```
@@ -450,13 +466,12 @@ If the user is impatient and says "just do it" or similar:
         * Commit changes with descriptive message
       ```
 
-   c. **Dispatch coder agent**
-      ```
-      Agent:
-        type: coder
-        isolation: worktree
-        prompt: {prepared prompt}
-      ```
+   c. **Dispatch coder agent using loaded executor**
+      Use the loaded executor's `spawn_and_run_parallel()` method to:
+      - Create worktree with proper push-to-origin sequence
+      - Spawn background agent
+      - Handle retry with learnings
+      - Persist errors to `.autodev/error-history.json`
 
    d. **Update agent-state.json**
       ```json
@@ -471,39 +486,23 @@ If the user is impatient and says "just do it" or similar:
       }
       ```
 
-3. **Wait for all agents to complete**
+4. **Wait for all agents to complete**
    ```
    Monitor agent completion
    If an agent fails: mark feature as failed, note error
    ```
 
-4. **After all agents complete:**
+5. **After all agents complete:**
    ```
    Read: .autodev/feature_list.json
    Update status for each feature based on agent results
    ```
 
-### Load Backend from Config
-
-Read `.autodev/config.json` to determine which backend to use:
-
-```json
-{
-  "backend": "opencode"
-}
-```
-
-Load the corresponding executor skill:
-- `"opencode"` → `skills/autodev/opencode-executor.md`
-- `"claude-code"` → (future) `skills/autodev/claude-executor.md`
-
-### Execute with Backend
-
-The executor handles:
-- Worktree creation (with proper push-to-origin sequence)
-- Background agent spawning
-- Retry with learnings
-- Error persistence to `.autodev/error-history.json`
+6. **Commit backend configuration**
+   ```
+   Bash: git add .autodev/config.json
+   Bash: git commit -m "feat: wire backend config into autodev command"
+   ```
 
 ---
 
