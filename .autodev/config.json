@@ -1,0 +1,25 @@
+{
+  "version": "1.0",
+  "backend": "opencode",
+  "opencode": {
+    "path": "opencode",
+    "args": ["run", "--print-logs"],
+    "timeout_seconds": 300
+  },
+  "claude_code": {
+    "path": "claude",
+    "args": ["-p"],
+    "timeout_seconds": 300
+  },
+  "retry": {
+    "max_attempts": 3
+  },
+  "tavily": {
+    "api_key": "${TAVILY_API_KEY}"
+  },
+  "max_parallel_agents": 4,
+  "worktree": {
+    "base_branch": "main",
+    "prefix": "autodev/opencode-"
+  }
+}
