@@ -52,8 +52,8 @@ htmlcov/
 .env
 .env.local
 
-# AutoDev
-.autodev/
+# AutoDev state files (tracked in git for agent coordination)
+# .autodev/  # NOTE: This directory IS tracked - do not ignore
 *.log
 
 # Logs
