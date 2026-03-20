@@ -37,9 +37,41 @@ Critical rules:
 
 ---
 
+## Observability Platform
+
+AutoDev includes an observability platform for tracking agent calls and progress. See these reference documents:
+
+- **Event Schema**: `skills/autodev/references/observability-events.md` — Structured event types for agent invocations, phases, files, and merges
+- **Pipeline Telemetry**: `skills/autodev/references/pipeline-telemetry.md` — Phase-level metrics collection
+- **Dashboard**: `skills/autodev/references/observability-dashboard.md` — Real-time execution dashboard format
+- **Post-hoc Analysis**: `skills/autodev/references/observability-analysis.md` — Execution analysis and bottleneck detection
+
+### Event Emission
+
+At key points during execution, emit events to `.autodev/events.jsonl`:
+
+```
+{"event_type": "phase.start", "timestamp": "...", "phase": 1, "phase_name": "Parse", ...}
+{"event_type": "phase.end", "timestamp": "...", "phase": 1, "phase_name": "Parse", "duration_seconds": 3, ...}
+```
+
+### Telemetry Collection
+
+Collect metrics for all 8 phases per `pipeline-telemetry.md` schema. Store in `.autodev/pipeline-telemetry.json`.
+
+### Dashboard Output
+
+During execution, output real-time dashboard to:
+- `.autodev/autodev-progress.txt` (append-only log)
+- stdout for live monitoring
+
+---
+
 ## Phase 1: Parse Request
 
 **Goal:** Extract the issue information from user input.
+
+**Observability:** Emit `phase.start` and `phase.end` events.
 
 ### Steps
 
@@ -81,6 +113,8 @@ Critical rules:
 ## Phase 2: Validate Issue
 
 **Goal:** Ensure the issue is valid before spending time implementing. This prevents wasted effort on invalid reports.
+
+**Observability:** Emit `phase.start` and `phase.end` events. Record validation decision.
 
 ### Steps
 
@@ -149,6 +183,8 @@ Critical rules:
 
 **Goal:** Understand the project structure, conventions, and relevant files.
 
+**Observability:** Emit `phase.start` and `phase.end` events. Track files_scanned count.
+
 ### Steps
 
 1. **Read project documentation**
@@ -199,6 +235,8 @@ Critical rules:
 ## Phase 4: Create Feature List
 
 **Goal:** Decompose the work into discrete features and subtasks.
+
+**Observability:** Emit `phase.start` and `phase.end` events. Record feature_count and subtask_count.
 
 ### Steps
 
@@ -287,6 +325,8 @@ Critical rules:
 
 **Goal:** Implement each feature in parallel using isolated worktrees.
 
+**Observability:** Emit `agent.invocation.start` and `agent.invocation.end` events for each agent. Update dashboard with agent status. Track worktrees_created and agents_dispatched counts.
+
 ### Steps
 
 1. **Get current agent-state**
@@ -357,6 +397,8 @@ Critical rules:
 
 **Goal:** Combine all feature branches into a unified branch and validate.
 
+**Observability:** Emit `merge.start`, `merge.conflict`, and `merge.complete` events. Track conflicts_encountered and merges_successful.
+
 ### Steps
 
 1. **Read merge strategy**
@@ -413,6 +455,8 @@ Critical rules:
 
 **Goal:** Have a reviewer agent check code quality and correctness.
 
+**Observability:** Emit `agent.invocation.start` and `agent.invocation.end` events for reviewer. Track verdict (APPROVED/CHANGES_REQUESTED) and cycles count.
+
 ### Steps
 
 1. **Dispatch reviewer agent**
@@ -467,6 +511,8 @@ Critical rules:
 
 **Goal:** Present results to the user with a branch ready for review.
 
+**Observability:** Generate post-hoc analysis per `observability-analysis.md`. Output final dashboard summary. Calculate bottleneck detection and cost estimation.
+
 ### Steps
 
 1. **Push unified branch to fork**
@@ -501,6 +547,12 @@ Critical rules:
 
    ### Reviewer Verdict
    - APPROVED / CHANGES_REQUESTED (with warnings)
+
+   ### Execution Metrics (Observability)
+   - Total Duration: {duration}
+   - Bottleneck Phase: {bottleneck_phase} ({bottleneck_percentage}%)
+   - Events Emitted: {event_count}
+   - Cost Estimate: ${cost}
 
    ### Next Steps
    - Review the branch at: {branch_url}
@@ -540,3 +592,4 @@ Critical rules:
 5. **Reproduce bugs** — verify before fixing
 6. **Test thoroughly** — run full suite before reporting
 7. **Be transparent** — report what was done, what failed, what needs attention
+8. **Emit observability events** — track all phases, agents, and key events per observability schemas
