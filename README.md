@@ -1,711 +1,307 @@
-# 🤖 Self-Improving Coding Agent Harness
+# AutoDev — Autonomous Coding Harness
 
-## Project Overview
+AutoDev is a [Claude Code](https://claude.ai/code) plugin that autonomously implements GitHub issues and feature requests. Given a repository and an issue, AutoDev validates the problem, decomposes work into parallel tasks, implements each feature in isolated git worktrees, and delivers a branch ready for human review.
 
-**Name:** AutoDev - Autonomous Coding Agent Harness
-
-**Mission:** Build a system that, given a GitHub repository and an issue, can autonomously understand the problem, plan a solution, implement it with tests, iterate on failures, and create mergeable PRs — with **0 human intervention**.
-
-**Inspiration:** 
-- [OpenAI: Harness Engineering](https://openai.com/index/harness-engineering/) - **Primary Reference**
-- Anthropic's agentic patterns
+**No Python required.** AutoDev runs as a Claude Code plugin — it coordinates multiple Claude Code agent sessions to do the work.
 
 ---
 
-## OpenAI Harness-Aligned Workflow
+## Architecture Overview
 
-This implementation follows the OpenAI Harness Engineering pattern exactly:
+AutoDev is a **Claude Code plugin**, not a Python application. There is no separate server or orchestrator process. The plugin uses Claude Code's built-in agent dispatch system to run multiple agents in parallel, each in its own git worktree.
 
 ```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                         FULL AUTOMATED FLOW                             │
-│                    (0 Human Intervention Target)                          │
-└─────────────────────────────────────────────────────────────────────────┘
-                                    │
-        ┌───────────────────────────┼───────────────────────────┐
-        ▼                           ▼                           ▼
-   ┌─────────┐               ┌─────────────┐              ┌──────────┐
-   │ FORK   │               │ FETCH ISSUE │              │ SETUP    │
-   │ Repo   │               │ from        │              │ CLAUDE.md│
-   └─────────┘               │ upstream    │              └──────────┘
-        │                    └─────────────┘                   │
-        │                            │                         │
-        ▼                            ▼                         ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│                     TASK DECOMPOSITION                                   │
-│  Issue → Features → Subtasks (parallel workstreams)                    │
-└─────────────────────────────────────────────────────────────────────────┘
-                                    │
-        ┌─────────────────────────────┼─────────────────────────────┐
-        ▼                             ▼                             ▼
-┌───────────────────┐   ┌───────────────────┐   ┌───────────────────┐
-│  CODER AGENT 1   │   │  CODER AGENT 2   │   │  CODER AGENT N   │
-│  (Feature A)      │   │  (Feature B)     │   │  (Feature N)      │
-│                   │   │                   │   │                   │
-│ - Write code     │   │ - Write code     │   │ - Write code     │
-│ - Write tests    │   │ - Write tests    │   │ - Write tests    │
-│ - Run tests      │   │ - Run tests      │   │ - Run tests      │
-│ - Iterate        │   │ - Iterate        │   │ - Iterate        │
-└───────────────────┘   └───────────────────┘   └───────────────────┘
-        │                         │                         │
-        └─────────────────────────┼─────────────────────────┘
-                                  ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│                     REVIEWER AGENT (Strict)                            │
-│  ┌─────────────────────────────────────────────────────────────────┐  │
-│  │ • Code review for each branch                                   │  │
-│  │ • Check for bugs, quality, tests, security                     │  │
-│  │ • APPROVED → proceed | CHANGES_REQUESTED → fix                │  │
-│  └─────────────────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────────────┘
-                                  │
-                                  ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│                     RESEARCH AGENT (On-Demand)                         │
-│  ┌─────────────────────────────────────────────────────────────────┐  │
-│  │ • Called when Reviewer finds issues                             │  │
-│  │ • Web search for solutions                                      │  │
-│  │ • Deep research on errors                                       │  │
-│  │ • Feed learnings back to Coders                                 │  │
-│  └─────────────────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────────────┘
-                                  │
-                                  ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│                     ITERATE UNTIL APPROVED                             │
-│  Loop: Code → Review → Research → Fix → Review → ... → APPROVED      │
-└─────────────────────────────────────────────────────────────────────────┘
-                                  │
-                                  ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│                     CREATE PR (Only After Approval)                    │
-│  • All branches approved                                               │
-│  • CI waits (future: auto-merge)                                      │
-│  • PR created in user's fork                                          │
-└─────────────────────────────────────────────────────────────────────────┘
+                    ┌─────────────────────────────────────┐
+                    │           /autodev                  │
+                    │     (Claude Code Plugin Command)     │
+                    └─────────────────┬───────────────────┘
+                                      │
+              ┌───────────────────────┼───────────────────────┐
+              ▼                       ▼                       ▼
+     ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+     │  Initiator      │     │  Coder Agent 1  │     │  Coder Agent N  │
+     │  (Phase 1-4)    │     │  (Worktree 1)   │     │  (Worktree N)   │
+     │                 │     │                 │     │                 │
+     │ - Parse issue   │     │ - Implement     │     │ - Implement     │
+     │ - Validate      │     │   feat-1        │     │   feat-N        │
+     │ - Explore       │     │ - Write tests   │     │ - Write tests   │
+     │ - Create plan   │     │ - Run tests     │     │ - Run tests     │
+     └─────────────────┘     └─────────────────┘     └─────────────────┘
+              │                       │                       │
+              │                       ▼                       ▼
+              │              ┌─────────────────────────────────┐
+              │              │   .autodev/feature_list.json   │
+              │              │   (Shared task state)         │
+              │              └─────────────────────────────────┘
+              │                       │
+              ▼                       ▼
+     ┌─────────────────────────────────────────────────────────────────┐
+     │                     Phase 6-8                                   │
+     │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐         │
+     │  │    Merge     │  │   Reviewer   │  │    Report    │         │
+     │  │  (unified    │─▶│   (quality   │─▶│  (push to    │         │
+     │  │   branch)    │  │    gate)     │  │   fork)      │         │
+     │  └──────────────┘  └──────────────┘  └──────────────┘         │
+     └─────────────────────────────────────────────────────────────────┘
+                                      │
+                                      ▼
+                            ┌─────────────────┐
+                            │  Branch URL     │
+                            │  (human review) │
+                            └─────────────────┘
 ```
 
-### Key Principles (From OpenAI Harness)
+## How It Works — 8 Phases
 
-1. **Humans Steer, Agents Execute** - Engineers design environment, specify intent, build feedback loops
-2. **0 Lines of Manually-Written Code** - Everything written by agents
-3. **Agent-to-Agent Review** - Agents review each other's work before merging
-4. **Parallel Workstreams** - Each feature gets its own git worktree + agent
-5. **Continuous Iteration** - Agents iterate until review passes
-6. **Research on Demand** - Research agent called only when needed
+### Phase 1: Parse Request
+
+AutoDev accepts either:
+- A GitHub issue URL: `https://github.com/owner/repo/issues/123`
+- A free-text feature description: `Add JWT authentication to all API endpoints`
+
+For GitHub issues, it fetches title, body, labels, and comments via the GitHub API.
+
+### Phase 2: Validate Issue
+
+Before writing any code, AutoDev confirms the issue is real:
+
+- **Bug reports:** Reproduce the bug, run the test suite, search for error messages
+- **Feature requests:** Skip validation (no bug to reproduce)
+- **Questions:** Mark as `NEEDS_INFO`, stop — a human needs to clarify
+
+If AutoDev cannot reproduce a bug and cannot find related code, it reports the issue as invalid and makes no changes.
+
+### Phase 3: Explore Codebase
+
+AutoDev reads project documentation and understands the codebase:
+- Project structure and conventions
+- Relevant files for the issue
+- Test framework and how to run tests
+- Build system and configuration
+
+### Phase 4: Create Feature List
+
+AutoDev decomposes the work into discrete features (2-5 independent chunks), each with concrete subtasks. This is written to `.autodev/feature_list.json` in the repository.
+
+```
+feat-1: User authentication
+  ├── sub-1: Create User model
+  ├── sub-2: Add validation
+  └── sub-3: Write unit tests
+
+feat-2: JWT middleware
+  ├── sub-1: Create JWT utility functions
+  ├── sub-2: Add auth decorator
+  └── sub-3: Integration tests
+```
+
+AutoDev creates one git worktree per feature branch.
+
+### Phase 5: Parallel Implementation
+
+Each feature is implemented in parallel by a separate Coder agent, each in its own isolated git worktree. Agents coordinate through shared state files to avoid stepping on each other.
+
+For each feature:
+1. Implement subtasks
+2. Write tests
+3. Run test suite
+4. Commit changes with descriptive messages
+
+### Phase 6: Merge Results
+
+AutoDev merges all feature branches into a unified branch (`autodev/issue-{N}`):
+1. Merge each feature branch sequentially
+2. Handle any merge conflicts
+3. Run the full test suite
+4. Fix regressions if they occur
+
+### Phase 7: Review
+
+A Reviewer agent performs a quality gate check:
+- Bug detection and logic errors
+- Convention compliance
+- Test coverage and quality
+- Security issues
+
+Returns structured verdict: `APPROVED` or `CHANGES_REQUESTED`.
+
+### Phase 8: Report
+
+AutoDev pushes the unified branch to your fork and provides the branch URL. **It never creates a PR automatically.** You review the branch and create the PR yourself.
 
 ---
 
-## System Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                              USER                                        │
-│                   (Provides GitHub Issue / Task)                         │
-└─────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│                       INITIATOR AGENT                                    │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐   │
-│  │ Issue       │  │ Task        │  │ PR          │  │ Quality     │   │
-│  │ Parser      │  │ Decomposer  │  │ Manager     │  │ Gatekeeper  │   │
-│  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘   │
-└─────────────────────────────────────────────────────────────────────────┘
-                                    │
-        ┌─────────────────────────────┼─────────────────────────────┐
-        ▼                             ▼                             ▼
-┌───────────────────┐   ┌───────────────────┐   ┌───────────────────┐
-│  CODER AGENT 1   │   │  CODER AGENT 2   │   │  CODER AGENT N   │
-│  (Feature A)     │   │  (Feature B)     │   │  (Feature N)     │
-│                   │   │                   │   │                   │
-│ - Write code     │   │ - Write code     │   │ - Write code     │
-│ - Write tests    │   │ - Write tests    │   │ - Write tests    │
-│ - Run tests      │   │ - Run tests      │   │ - Run tests      │
-│ - Fix failures   │   │ - Fix failures   │   │ - Fix failures   │
-└───────────────────┘   └───────────────────┘   └───────────────────┘
-        │                         │                         │
-        └─────────────────────────┼─────────────────────────┘
-                                  ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│                       RESEARCH AGENT                                    │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐                 │
-│  │ Web         │  │ Code        │  │ Error       │                 │
-│  │ Search      │  │ Analysis    │  │ Debugging   │                 │
-│  └─────────────┘  └─────────────┘  └─────────────┘                 │
-└─────────────────────────────────────────────────────────────────────────┘
-                                  │
-                                  ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│                      SUBTASK PLAN.md                                    │
-│  ┌─────────────────────────────────────────────────────────────────┐   │
-│  │ Feature: Login Feature                                          │   │
-│  │  ├─ Subtask 1: Add user model ✓ DONE                         │   │
-│  │  ├─ Subtask 2: Create auth endpoints ✓ DONE                  │   │
-│  │  ├─ Subtask 3: Write unit tests ◐ IN_PROGRESS               │   │
-│  │  └─ Subtask 4: Integration tests ✗ FAILED                    │   │
-│  │                                                              │   │
-│  │ Feature: Dashboard                                            │   │
-│  │  ├─ Subtask 1: Create React components ○ PENDING             │   │
-│  │  └─ Subtask 2: Connect API ◐ IN_PROGRESS                   │   │
-│  └─────────────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## Core Components
-
-### 1. Initiator Agent
-
-**Responsibilities:**
-- Parse GitHub issues
-- Decompose into features
-- Assign features to coder agents
-- Track overall progress
-- Create PRs
-- Quality gate (tests pass, code review)
-
-**Skills:**
-- GitHub API
-- Issue parsing
-- PR creation/merging
-
-### 2. Coder Agent (Multiple Instances)
-
-**Responsibilities:**
-- Implement subtasks sequentially
-- Write code
-- Write comprehensive tests
-- Run tests and fix failures
-- Report status back to initiator
-
-**Skills:**
-- Claude Code / OpenCode
-- Git operations
-- Test frameworks
-
-### 3. Research Agent
-
-**Responsibilities:**
-- When subtask fails repeatedly
-- Web search for solutions
-- Deep research on errors
-- Feed learnings back to coder
-
-**Skills:**
-- Tavily search
-- Web browsing
-- Error analysis
-
-### 4. Subtask Plan (JSON + Markdown)
-
-**Structure:**
-
-```json
-{
-  "project": "my-awesome-repo",
-  "issue": "#123 - Add user authentication",
-  "features": [
-    {
-      "id": "feat_1",
-      "name": "User Model",
-      "status": "completed",
-      "subtasks": [
-        {
-          "id": "subtask_1",
-          "description": "Create User model with fields",
-          "status": "completed",
-          "agent": "coder_1",
-          "attempts": 1,
-          "error": null
-        },
-        {
-          "id": "subtask_2", 
-          "description": "Add validation to User model",
-          "status": "failed",
-          "agent": "coder_1",
-          "attempts": 3,
-          "error": "ValidationError: email format",
-          "research_needed": true
-        }
-      ]
-    }
-  ],
-  "metadata": {
-    "created": "2026-02-28T10:00:00Z",
-    "updated": "2026-02-28T12:30:00Z",
-    "total_subtasks": 10,
-    "completed": 4,
-    "failed": 1,
-    "in_progress": 2,
-    "pending": 3
-  }
-}
-```
-
-**Markdown View (subtask_plan.md):**
-
-```markdown
-# Subtask Plan: Issue #123 - Add User Authentication
-
-## Progress: 4/10 completed
-
-## Feature 1: User Model ✓
-- [x] subtask_1: Create User model - DONE (coder_1)
-- [x] subtask_2: Add validation - DONE (coder_1)
-
-## Feature 2: Auth Endpoints ◐
-- [x] subtask_3: POST /register - DONE (coder_2)
-- [ ] subtask_4: POST /login - IN_PROGRESS (coder_2)
-- [ ] subtask_5: JWT middleware - PENDING
-
-## Feature 3: Tests ✗
-- [x] subtask_6: Unit tests - DONE (coder_1)
-- [ ] subtask_7: Integration tests - FAILED (coder_1) ⚠️
-  - Error: 3 failed tests
-  - Research: triggered for error analysis
-```
-
----
-
-## Execution Flow
-
-### Step 1: Issue Received
-
-```
-User → Issue #123: "Add user authentication"
-```
-
-### Step 2: Issue Parsing
-
-```
-Initiator:
-├── Parse issue title & body
-├── Extract requirements
-├── Identify tech stack
-└── Create feature list
-```
-
-### Step 3: Feature Decomposition
-
-```
-Feature 1: User Model
-├── Subtask 1.1: Create database schema
-├── Subtask 1.2: Add validation
-└── Subtask 1.3: Add indexes
-
-Feature 2: Auth Endpoints  
-├── Subtask 2.1: POST /register
-├── Subtask 2.2: POST /login
-└── Subtask 2.3: JWT middleware
-
-Feature 3: Testing
-├── Subtask 3.1: Unit tests
-├── Subtask 3.2: Integration tests
-└── Subtask 3.3: E2E tests
-```
-
-### Step 4: Parallel Execution
-
-```
-┌──────────────────────────────────────────────────────┐
-│              CODER AGENT POOL (N agents)             │
-├──────────────────────────────────────────────────────┤
-│ Agent 1: Feature 1 ──► subtask_1.1 → 1.2 → 1.3    │
-│ Agent 2: Feature 2 ──► subtask_2.1 → 2.2 → 2.3    │
-│ Agent 3: Feature 3 ──► subtask_3.1 → 3.2 → 3.3    │
-└──────────────────────────────────────────────────────┘
-         │              │              │
-         ▼              ▼              ▼
-    ┌─────────────────────────────────────────┐
-    │         SUBTASK PLAN (JSON)             │
-    │    Updates in real-time as work        │
-    │    progresses/fails/succeeds            │
-    └─────────────────────────────────────────┘
-```
-
-### Step 5: Error Handling
-
-```
-Subtask FAILED:
-├── Increment attempt count
-├── Log error details
-├── If attempts < 3: Retry
-├── If attempts >= 3:
-│   └── Trigger RESEARCH AGENT
-│       ├── Search web for solutions
-│       ├── Analyze similar code
-│       └── Provide fix suggestions
-│
-└── Coder receives research findings
-    └── Retry with new insights
-```
-
-### Step 6: PR Creation
-
-```
-All subtasks complete:
-├── Run full test suite
-├── Lint and format check
-├── Create feature branch
-├── Commit changes
-├── Create PR with description
-└── Add reviewers (if configured)
-```
-
----
-
-## Parallel Execution Strategy
-
-### Independent Tasks (Run in Parallel)
-- Features that don't depend on each other
-- Different files/modules
-- Tests for different components
-
-### Sequential Tasks (Run in Order)
-- Subtasks within same feature
-- Database migrations
-- Parent-child dependencies
-
-### Decision Logic
-
-```python
-def can_run_parallel(subtask_a, subtask_b):
-    """Check if two subtasks can run in parallel"""
-    
-    # Same file? Can't parallelize
-    if subtask_a.file == subtask_b.file:
-        return False
-    
-    # Dependency exists? Can't parallelize  
-    if subtask_b.depends_on(subtask_a):
-        return False
-    
-    # Uses same resource? Maybe can't
-    if subtask_a.resource == subtask_b.resource:
-        return False
-        
-    return True
-```
-
----
-
-## Research Agent Integration
-
-### When Triggered
-
-- Subtask fails 3+ times
-- Error is unknown/uncommon
-- Needs external knowledge
-
-### Research Process
-
-```
-1. Analyze error message
-2. Extract key terms
-3. Search:
-   - Stack Overflow
-   - GitHub issues
-   - Documentation
-   - Blog posts
-4. Synthesize findings
-5. Provide actionable fix
-```
-
-### Output Format
-
-```json
-{
-  "research_id": "research_123",
-  "triggered_by": "subtask_2.3",
-  "query": "TypeScript async/await testing Jest",
-  "findings": [
-    {
-      "source": "stackoverflow.com/...",
-      "title": "How to test async functions",
-      "relevance": 0.9,
-      "solution": "Use async/await in test..."
-    }
-  ],
-  "recommended_fix": "Add 'async' to test function...",
-  "confidence": 0.85
-}
-```
-
----
-
-## File Structure
+## Plugin Structure
 
 ```
 autodev/
-├── README.md
-├── docs/                    # Documentation
-│   ├── harness_comparison.md
-│   └── bugs_and_improvements.md
-├── subtask_plan.md          # Current task plan
-├── config/
-│   ├── default.yaml         # Default config
-│   └── repos/              # Repo-specific configs
-│       └── my-repo.yaml
+├── .claude-plugin/
+│   └── plugin.json          # Plugin manifest
+├── commands/
+│   └── autodev.md           # /autodev command (8 phases)
 ├── agents/
-│   ├── initiator/           # Orchestrates workflow
-│   ├── coder/               # Writes code
-│   ├── reviewer/            # Agent-to-agent review ⭐ NEW
-│   └── researcher/          # Web search for errors
-├── core/
-│   ├── github_client.py
-│   ├── task_decomposer.py
-│   ├── parallel_executor.py
-│   ├── pr_manager.py
-│   ├── activity_logger.py
-│   └── session_history.py
-├── dashboard/               # Web dashboard
-├── integrations/
-│   └── slack_bot.py         # Slack integration
-└── utils/
-    └── logger.py
+│   ├── coder.md             # Coder agent skill
+│   ├── researcher.md         # Researcher agent (on-demand)
+│   └── reviewer.md          # Reviewer agent (quality gate)
+└── skills/autodev/references/
+    ├── harness-principles.md      # Core operational rules
+    ├── issue-validation.md        # Pre-implementation validation
+    ├── feature-list-schema.md     # Task tracking schema
+    ├── shared-state-protocol.md   # Multi-agent coordination
+    └── merge-strategy.md          # Branch merging protocol
 ```
 
 ---
 
-## Configuration Example
+## Installation
 
-```yaml
-# config/repos/my-app.yaml
-
-repo:
-  owner: "my-org"
-  name: "my-app"
-  branch: "main"
-
-issue:
-  number: 123
-  
-agents:
-  max_parallel: 4
-  timeout_per_subtask: 600  # seconds
-  
-research:
-  trigger_after_failures: 3
-  max_research_time: 300
-  
-github:
-  auto_create_pr: true
-  auto_merge: false
-  add_reviewers:
-    - "tech-lead"
-    
-testing:
-  run_before_pr: true
-  coverage_threshold: 80
-  
-skills:
-  - code_review
-  - write_tests
-  - run_tests
-  - fix_errors
-```
-
----
-
-## Success Metrics
-
-| Metric | Target |
-|--------|--------|
-| Task completion rate | >90% |
-| Research effectiveness | >70% |
-| PR merge rate | >80% |
-| Avg subtask attempts | <2 |
-| Human intervention | <5% |
-
----
-
-## Phase Roadmap
-
-### Phase 1: Foundation ✅ DONE
-- [x] Set up project structure
-- [x] Implement GitHub client
-- [x] Create task decomposer
-- [x] Basic subtask tracking
-
-### Phase 2: Single Agent ✅ DONE
-- [x] Implement Coder agent
-- [x] Connect to Claude Code / OpenCode
-- [x] Basic test execution
-- [x] Error handling
-
-### Phase 3: Multi-Agent ✅ DONE
-- [x] Implement Initiator
-- [x] Task queue system
-- [x] Parallel execution
-- [x] Real-time updates
-
-### Phase 4: Research Integration ✅ DONE
-- [x] Implement Research agent
-- [x] Web search integration
-- [x] Error analysis
-- [x] Feedback loop
-
-### Phase 5: PR Pipeline ✅ DONE
-- [x] PR creation
-- [x] Agent-to-agent code review ⭐
-- [ ] Auto-merge after CI
-- [x] Full end-to-end test
-
-### Phase 6: Polish 🔄
-- [x] Enhanced logging
-- [ ] Error handling improvements
-- [ ] Rate limiting
-- [ ] Test coverage
-- [ ] Production deployment
-
----
-
-## Agent Selection
-
-AutoDev supports multiple agent backends. You can choose which agent to use based on your setup.
-
-### Available Agents
-
-- **opencode** - Uses OpenCode CLI (default)
-- **claude-code** - Uses Claude Code CLI
-
-### Command-Line Flags
-
-| Flag | Description |
-|------|-------------|
-| `--agent-type` | Choose agent backend: `opencode` or `claude-code` |
-| `--claude-skip-permissions` | Skip permission prompts for Claude Code (useful for CI/CD) |
-
-### Shared Memory Context
-
-AutoDev maintains a shared memory context across agent sessions using `core/agent_memory.py`. This allows:
-- Context preservation between tasks
-- Cross-agent knowledge sharing
-- Persistent conversation history
-
-The memory is stored in `.agent_memory/` directory and persists between runs.
-
----
-
-## Usage Examples
-
-### Example 1: Start from Issue (OpenCode)
+AutoDev is installed as a Claude Code plugin:
 
 ```bash
-python autodev.py --repo owner/repo --issue 123
+# Clone the repository
+git clone https://github.com/suryanshrawat/autodev.git
+
+# Navigate to the plugin directory
+cd autodev
+
+# The plugin is auto-discovered by Claude Code
+# Run the command:
+/autodev https://github.com/owner/repo/issues/123
 ```
 
-### Example 2: Start from Issue (Claude Code)
+### Requirements
+
+- [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) installed and authenticated
+- GitHub CLI (`gh`) authenticated: `gh auth login`
+- A target repository with write access (for pushing to fork)
+
+---
+
+## Usage
+
+### Basic Usage
 
 ```bash
-python autodev.py --repo owner/repo --issue 123 --agent-type claude-code
+# From a GitHub issue URL
+/autodev https://github.com/owner/repo/issues/123
+
+# From a free-text feature description
+/autodev Add rate limiting to all API endpoints
 ```
 
-### Example 3: Claude Code with Skip Permissions
+### Workflow
 
-```bash
-python autodev.py --repo owner/repo --issue 123 --agent-type claude-code --claude-skip-permissions
+1. **Invoke** `/autodev` with an issue URL or feature description
+2. **AutoDev validates** the issue (runs tests, tries to reproduce bugs)
+3. **AutoDev explores** the codebase and creates a task plan
+4. **AutoDev implements** each feature in parallel worktrees
+5. **AutoDev merges** results and runs the full test suite
+6. **AutoDev reviews** code quality
+7. **AutoDev reports** with a branch URL — you create the PR
+
+---
+
+## Key Principles
+
+### No Auto-PRs
+
+AutoDev **never creates pull requests automatically**. It pushes to your fork and provides the branch URL. You review the changes and create the PR yourself.
+
+### Validate Before Coding
+
+For bug reports, AutoDev reproduces the issue before fixing it. If it cannot reproduce the bug or find related code, it reports the issue as invalid and makes no changes.
+
+### JSON for Task State
+
+Task tracking lives in `.autodev/feature_list.json` — a structured JSON file, not markdown. This prevents accidental corruption by LLMs and enables reliable programmatic updates.
+
+### Git Worktree Isolation
+
+Each feature is implemented in a separate git worktree. This isolation prevents parallel agents from interfering with each other and provides clean, auditable branch history.
+
+---
+
+## Runtime Files
+
+AutoDev creates files in `.autodev/` in the target repository:
+
+| File | Purpose |
+|------|---------|
+| `.autodev/feature_list.json` | Task tracking — features, subtasks, statuses |
+| `.autodev/agent-state.json` | Multi-agent coordination — claims, messages |
+| `.autodev/autodev-progress.txt` | Human-readable progress log |
+
+These files are committed to the branch alongside the implementation changes.
+
+---
+
+## Agents
+
+### Coder Agent
+
+Implements features in isolated git worktrees. Reads its assigned feature from `feature_list.json`, implements subtasks, writes tests, and runs the test suite before marking complete.
+
+### Researcher Agent
+
+On-demand agent for researching errors, APIs, and technical questions. Called when a coder gets stuck after 3+ failed attempts. Returns structured findings with code snippets and links to documentation.
+
+### Reviewer Agent
+
+Quality gate that runs after all features are merged. Checks for bugs, logic errors, convention violations, and test coverage. Returns a structured verdict (`APPROVED` or `CHANGES_REQUESTED`) with specific issue descriptions and fix recommendations.
+
+---
+
+## Git Branching
+
+AutoDev uses a two-level branch structure:
+
+| Branch | Purpose |
+|--------|---------|
+| `autodev/feat-N-<slug>` | Feature branch per agent |
+| `autodev/issue-{N}` | Unified branch with all features |
+
+Example:
+```
+main                           # Base branch
+├── autodev/issue-123          # Unified branch (merged features)
+│   ├── autodev/feat-1-user-auth      # Feature 1 branch
+│   ├── autodev/feat-2-jwt-middleware # Feature 2 branch
+│   └── autodev/feat-3-tests          # Feature 3 branch
 ```
 
-### Example 4: Resume from Plan
+---
 
-```bash
-python autodev.py --resume subtask_plan.json
-```
+## Lessons Learned
 
-### Example 5: Run Specific Feature
+### Reproduce Before Fixing
 
-```bash
-python autodev.py --feature user-auth --agent coder_1
-```
+Always verify a bug is real before implementing a fix:
+1. Run the existing test suite
+2. Search for error messages in the codebase
+3. Try to follow the reproduction steps
+4. Only then implement the fix
+
+### Test on Simple Issues First
+
+Before tackling complex issues, validate the system works on:
+- Documentation fixes
+- Typo corrections
+- Issues where the fix is clearly defined
+
+### Fork Push Only
+
+AutoDev pushes changes to your fork, never to the upstream repository. This gives you a chance to review before anything reaches the main codebase.
 
 ---
 
-## Dependencies
+## References
 
-- Python 3.10+
-- GitHub API
-- Claude Code / OpenAI API
-- Tavily (research)
-- Redis (optional, for queue)
-
----
-
-## Risk Mitigation
-
-| Risk | Mitigation |
-|------|------------|
-| Rate limits | Add delays, use multiple tokens |
-| Infinite loops | Max attempts per subtask |
-| Bad code | Quality gate before PR |
-| Wrong direction | Human approval checkpoints |
-| Lost progress | Save state frequently |
+- [Harness Principles](skills/autodev/references/harness-principles.md) — Core operational rules
+- [Issue Validation](skills/autodev/references/issue-validation.md) — Pre-implementation validation protocol
+- [Feature List Schema](skills/autodev/references/feature-list-schema.md) — JSON schema for task tracking
+- [Shared State Protocol](skills/autodev/references/shared-state-protocol.md) — Multi-agent coordination
+- [Merge Strategy](skills/autodev/references/merge-strategy.md) — Branch merging protocol
 
 ---
 
-## Next Steps
-
-1. ⬜ Review and refine this plan
-2. ⬜ Set up project repo
-3. ⬜ Implement core components
-4. ⬜ Test with simple repo
-5. ⬜ Scale up complexity
-
----
-
-## Current Status & Roadmap
-
-### ✅ Implemented
-
-| Component | Status |
-|-----------|--------|
-| GitHub issue fetching & parsing | ✅ Done |
-| Task decomposition | ✅ Done |
-| Parallel execution with OpenCode | ✅ Done |
-| Worktree management | ✅ Done |
-| Activity logger + Dashboard | ✅ Done |
-| PR creation | ✅ Done |
-| Agent-to-agent code review | ✅ Done |
-| Research agent | ✅ Done |
-| Slack bot integration | ✅ Done |
-| Enhanced logging | ✅ Done |
-
-### 📋 Roadmap
-
-#### 🔴 High Priority (Next)
-1. **Auto-merge after CI** - Wait for CI → merge PR
-2. **Knowledge base** - Update AGENTS.md, structured docs/
-3. **Fix bugs** - See bugs_and_improvements.md
-
-#### 🟡 Medium Priority
-4. Chrome DevTools - UI bug reproduction
-5. PromQL/LogQL access - Agents query metrics
-6. Architecture linters - Enforce structure
-
-#### 🟢 Future
-7. Garbage collection agent - Auto-cleanup
-8. Doc-gardening agent - Fix stale docs
-9. Cost tracking - API spend per run
-
----
-
-## OpenAI Harness Alignment
-
-See [harness_comparison.md](./docs/harness_comparison.md) for detailed comparison with OpenAI's approach.
-
-### Key Features Matching OpenAI
-- ✅ Humans steer, agents execute
-- ✅ Issue → Code → PR workflow
-- ✅ Parallel agents with worktrees
-- ✅ Agent-to-agent code review
-- ✅ Activity logging & observability
-- 🔲 Auto-merge after CI (in progress)
-- 🔲 Chrome DevTools for UI testing
-
----
-
-*Plan Version: 1.2*
-*Updated: 2026-03-01*
-*Based on OpenAI Harness Engineering + Anthropic Agent Patterns*
+*AutoDev is inspired by [OpenAI's Harness Engineering](https://openai.com/index/harness-engineering/) approach to autonomous coding agents.*
