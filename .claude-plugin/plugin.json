@@ -1,0 +1,9 @@
+{
+  "name": "autodev",
+  "version": "1.0.0",
+  "description": "Autonomous coding harness: takes a feature request or GitHub issue and implements it end-to-end using parallel agents in isolated worktrees",
+  "author": {
+    "name": "Suryansh Rawat"
+  },
+  "keywords": ["harness", "autonomous", "agents", "coding"]
+}
