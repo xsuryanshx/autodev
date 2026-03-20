@@ -1,0 +1,288 @@
+/* AutoDev Dashboard — dark theme */
+:root {
+  --bg: #0f0f1a;
+  --surface: #1a1a2e;
+  --surface-hover: #16213e;
+  --border: #2a2a4a;
+  --text: #e0e0e0;
+  --text-muted: #888;
+  --accent: #4fc3f7;
+  --green: #66bb6a;
+  --yellow: #ffb74d;
+  --red: #ef5350;
+  --blue: #42a5f5;
+  --purple: #ab47bc;
+  --radius: 8px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  padding: 0;
+  min-height: 100vh;
+}
+
+/* ── Header ─────────────────────────────────────────────── */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 24px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.header-left { display: flex; align-items: center; gap: 12px; }
+.header-right { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; }
+.logo { font-weight: 700; font-size: 1.1rem; color: var(--accent); }
+.issue-title { color: var(--text-muted); font-size: 0.9rem; }
+.meta-label { color: var(--text-muted); }
+.meta-value { color: var(--text); font-family: 'SF Mono', 'Fira Code', monospace; }
+.meta-sep { color: var(--border); margin: 0 2px; }
+.badge {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+.badge-connected { background: var(--green); color: #000; }
+.badge-waiting { background: var(--yellow); color: #000; }
+.badge-error { background: var(--red); color: #fff; }
+
+/* ── Sections ───────────────────────────────────────────── */
+.section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+.section-title {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+}
+
+/* ── Pipeline Stepper ───────────────────────────────────── */
+.section:has(.stepper) {
+  margin: 16px 24px;
+}
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  overflow-x: auto;
+}
+.step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: 6px;
+  white-space: nowrap;
+  font-size: 0.85rem;
+  transition: background 0.2s;
+}
+.step .step-num {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  background: var(--border);
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.step .step-label { color: var(--text-muted); }
+.step.completed .step-num { background: var(--green); color: #000; }
+.step.completed .step-label { color: var(--green); }
+.step.active { background: var(--surface-hover); }
+.step.active .step-num { background: var(--accent); color: #000; animation: pulse 1.5s infinite; }
+.step.active .step-label { color: var(--accent); font-weight: 600; }
+.step-arrow { color: var(--border); margin: 0 2px; }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* ── Main Grid ──────────────────────────────────────────── */
+.main-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  padding: 0 24px 16px;
+}
+
+/* ── Agent Cards ────────────────────────────────────────── */
+.agent-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+.agent-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  transition: border-color 0.2s;
+}
+.agent-card:hover { border-color: var(--accent); }
+.agent-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.agent-name { font-weight: 600; font-size: 0.9rem; }
+.agent-status {
+  font-size: 0.7rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+.status-running { background: var(--blue); color: #fff; }
+.status-completed { background: var(--green); color: #000; }
+.status-error { background: var(--red); color: #fff; }
+.status-waiting { background: var(--yellow); color: #000; }
+.agent-meta { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 8px; }
+.progress-bar {
+  height: 6px;
+  background: var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--green));
+  border-radius: 3px;
+  transition: width 0.4s ease;
+}
+.agent-time {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-top: 6px;
+}
+
+/* ── Event Feed ─────────────────────────────────────────── */
+.event-feed {
+  max-height: 360px;
+  overflow-y: auto;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 0.78rem;
+  line-height: 1.6;
+}
+.event-line {
+  display: flex;
+  gap: 8px;
+  padding: 3px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+}
+.event-time { color: var(--text-muted); white-space: nowrap; }
+.event-source {
+  padding: 0 4px;
+  border-radius: 3px;
+  font-weight: 600;
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+.event-msg { color: var(--text); }
+
+/* Agent color palette for event tags */
+.tag-0 { background: #1e3a5f; color: #42a5f5; }
+.tag-1 { background: #1b5e20; color: #66bb6a; }
+.tag-2 { background: #4a148c; color: #ce93d8; }
+.tag-3 { background: #e65100; color: #ffb74d; }
+.tag-4 { background: #880e4f; color: #f48fb1; }
+.tag-orchestrator { background: #263238; color: #90a4ae; }
+
+/* ── Bottom Grid ────────────────────────────────────────── */
+.bottom-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 16px;
+  padding: 0 24px 24px;
+}
+
+/* ── File Heatmap ───────────────────────────────────────── */
+.file-heatmap {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 4px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+.file-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+.file-row.conflict { border-left: 3px solid var(--yellow); }
+.file-path { color: var(--text); }
+.file-agents { display: flex; gap: 4px; }
+.file-agent-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+/* ── Cost Tracker ───────────────────────────────────────── */
+.cost-summary {
+  display: flex;
+  gap: 24px;
+  margin-bottom: 12px;
+}
+.cost-stat { text-align: center; }
+.cost-label { display: block; font-size: 0.75rem; color: var(--text-muted); }
+.cost-value {
+  display: block;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--accent);
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+.cost-breakdown { font-size: 0.8rem; }
+.cost-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.cost-model { color: var(--text-muted); }
+.cost-amount { color: var(--text); font-family: 'SF Mono', 'Fira Code', monospace; }
+
+/* ── Empty State ────────────────────────────────────────── */
+.empty-state {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  text-align: center;
+  padding: 24px;
+}
+
+/* ── Scrollbar ──────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* ── Responsive ─────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .main-grid { grid-template-columns: 1fr; }
+  .bottom-grid { grid-template-columns: 1fr; }
+}

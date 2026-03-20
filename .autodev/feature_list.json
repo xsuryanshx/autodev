@@ -1,0 +1,108 @@
+{
+  "issue": {
+    "number": 8,
+    "title": "Feat: Build observability dashboard with real-time UI for tracking agent calls and pipeline execution",
+    "url": "https://github.com/xsuryanshx/autodev/issues/8",
+    "type": "feature"
+  },
+  "features": [
+    {
+      "id": "feat-1",
+      "slug": "core-event-system",
+      "description": "Structured event system with typed events, emitter, and JSONL persistence",
+      "status": "pending",
+      "branch": "autodev/feat-1-core-event-system",
+      "subtasks": [
+        {
+          "id": "task-1-1",
+          "description": "Create AgentEvent dataclass with all event types and EventEmitter with subscribe/publish/JSONL persistence",
+          "files": ["core/events.py"],
+          "status": "pending"
+        },
+        {
+          "id": "task-1-2",
+          "description": "Write comprehensive tests for event emission, serialization, and JSONL persistence",
+          "files": ["tests/test_events.py"],
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": "feat-2",
+      "slug": "pipeline-telemetry",
+      "description": "Pipeline telemetry collector that wraps phases to automatically collect metrics",
+      "status": "pending",
+      "branch": "autodev/feat-2-pipeline-telemetry",
+      "subtasks": [
+        {
+          "id": "task-2-1",
+          "description": "Create PipelineTelemetry class with phase_context, record_agent_dispatch/result/token_usage, get_phase_summary, get_session_summary",
+          "files": ["core/telemetry.py"],
+          "status": "pending"
+        },
+        {
+          "id": "task-2-2",
+          "description": "Write tests for telemetry collection, phase timing, and summary generation",
+          "files": ["tests/test_telemetry.py"],
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": "feat-3",
+      "slug": "dashboard-server-ui",
+      "description": "Web dashboard with HTTP+SSE server and single-page real-time UI",
+      "status": "pending",
+      "branch": "autodev/feat-3-dashboard-server-ui",
+      "subtasks": [
+        {
+          "id": "task-3-1",
+          "description": "Create DashboardServer class with aiohttp HTTP server and SSE endpoint",
+          "files": ["dashboard/server.py"],
+          "status": "pending"
+        },
+        {
+          "id": "task-3-2",
+          "description": "Build single-page dashboard HTML/CSS/JS with pipeline stepper, agent cards, live event feed, file heatmap, cost tracker, timeline view",
+          "files": ["dashboard/static/index.html", "dashboard/static/style.css", "dashboard/static/app.js"],
+          "status": "pending"
+        },
+        {
+          "id": "task-3-3",
+          "description": "Write tests for server startup, SSE streaming, and event publishing",
+          "files": ["tests/test_dashboard.py"],
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": "feat-4",
+      "slug": "post-run-analysis",
+      "description": "Post-run session analysis with report generation and bottleneck identification",
+      "status": "pending",
+      "branch": "autodev/feat-4-post-run-analysis",
+      "subtasks": [
+        {
+          "id": "task-4-1",
+          "description": "Create SessionAnalyzer with generate_report, identify_bottlenecks, compare_runs methods",
+          "files": ["core/analysis.py"],
+          "status": "pending"
+        },
+        {
+          "id": "task-4-2",
+          "description": "Create post-run HTML report template",
+          "files": ["dashboard/templates/report.html"],
+          "status": "pending"
+        },
+        {
+          "id": "task-4-3",
+          "description": "Write tests for report generation and bottleneck identification",
+          "files": ["tests/test_analysis.py"],
+          "status": "pending"
+        }
+      ]
+    }
+  ],
+  "created_at": "2026-03-20T06:00:00Z",
+  "updated_at": "2026-03-20T06:00:00Z"
+}

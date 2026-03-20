@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>AutoDev Session Report — $session_id</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #1a1a2e; color: #e0e0e0; margin: 0; padding: 20px; }
+    .container { max-width: 900px; margin: 0 auto; }
+    h1 { color: #4fc3f7; margin-bottom: 4px; }
+    h2 { color: #81c784; border-bottom: 1px solid #333; padding-bottom: 8px; margin-top: 32px; }
+    p.sub { color: #888; margin-top: 0; }
+    table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+    th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #333; }
+    th { background: #16213e; color: #4fc3f7; }
+    tr:hover { background: #16213e; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin: 16px 0; }
+    .card { background: #16213e; border-radius: 8px; padding: 16px; text-align: center; }
+    .card .val { font-size: 2em; font-weight: bold; color: #4fc3f7; }
+    .card .lbl { color: #999; font-size: 0.9em; }
+    .warning { color: #ffb74d; }
+    .critical { color: #ef5350; }
+    ul { padding-left: 20px; }
+    li { margin: 8px 0; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>AutoDev Session Report</h1>
+    <p class="sub">Session: $session_id</p>
+
+    <div class="grid">
+      <div class="card"><div class="val">${total_duration}s</div><div class="lbl">Total Duration</div></div>
+      <div class="card"><div class="val">$$estimated_cost</div><div class="lbl">Estimated Cost</div></div>
+      <div class="card"><div class="val">$files_created</div><div class="lbl">Files Created</div></div>
+      <div class="card"><div class="val">$tests_passed/$tests_total</div><div class="lbl">Tests Passed</div></div>
+    </div>
+
+    <h2>Phase Breakdown</h2>
+    <table>
+      <tr><th>#</th><th>Phase</th><th>Duration</th><th>Status</th></tr>
+      $phase_rows
+    </table>
+
+    <h2>Agent Performance</h2>
+    <table>
+      <tr><th>Task</th><th>Duration</th><th>Status</th><th>Retries</th></tr>
+      $agent_rows
+    </table>
+
+    <h2>Token Usage</h2>
+    <table>
+      <tr><th>Metric</th><th>Value</th></tr>
+      <tr><td>Input Tokens</td><td>$total_input_tokens</td></tr>
+      <tr><td>Output Tokens</td><td>$total_output_tokens</td></tr>
+      <tr><td>Estimated Cost</td><td>$$estimated_cost</td></tr>
+    </table>
+
+    <h2>Bottlenecks</h2>
+    <ul>
+      $bottleneck_items
+    </ul>
+  </div>
+</body>
+</html>

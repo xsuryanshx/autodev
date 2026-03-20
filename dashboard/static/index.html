@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AutoDev Dashboard</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <!-- ── Header ─────────────────────────────────────────────────── -->
+  <header class="header">
+    <div class="header-left">
+      <span class="logo">AutoDev</span>
+      <span id="issue-title" class="issue-title">—</span>
+    </div>
+    <div class="header-right">
+      <span class="meta-label">Session</span>
+      <span id="session-id" class="meta-value">—</span>
+      <span class="meta-sep">|</span>
+      <span class="meta-label">Elapsed</span>
+      <span id="elapsed-time" class="meta-value">0s</span>
+      <span class="meta-sep">|</span>
+      <span id="connection-status" class="badge badge-waiting">Connecting…</span>
+    </div>
+  </header>
+
+  <!-- ── Pipeline Stepper ───────────────────────────────────────── -->
+  <section class="section">
+    <h2 class="section-title">Pipeline</h2>
+    <div class="stepper" id="stepper">
+      <!-- steps injected by app.js -->
+    </div>
+  </section>
+
+  <!-- ── Main grid ─────────────────────────────────────────────── -->
+  <main class="main-grid">
+
+    <!-- Agent Cards -->
+    <section class="section agents-section">
+      <h2 class="section-title">Agents</h2>
+      <div id="agent-cards" class="agent-cards">
+        <div class="empty-state">No agents dispatched yet.</div>
+      </div>
+    </section>
+
+    <!-- Live Event Feed -->
+    <section class="section feed-section">
+      <h2 class="section-title">Live Events</h2>
+      <div id="event-feed" class="event-feed">
+        <div class="empty-state">Waiting for events…</div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ── Bottom grid ───────────────────────────────────────────── -->
+  <div class="bottom-grid">
+
+    <!-- File Heatmap -->
+    <section class="section heatmap-section">
+      <h2 class="section-title">File Heatmap</h2>
+      <div id="file-heatmap" class="file-heatmap">
+        <div class="empty-state">No file writes yet.</div>
+      </div>
+    </section>
+
+    <!-- Cost Tracker -->
+    <section class="section cost-section">
+      <h2 class="section-title">Cost Tracker</h2>
+      <div class="cost-summary">
+        <div class="cost-stat">
+          <span class="cost-label">Total Tokens</span>
+          <span id="total-tokens" class="cost-value">0</span>
+        </div>
+        <div class="cost-stat">
+          <span class="cost-label">Est. Cost</span>
+          <span id="total-cost" class="cost-value">$0.0000</span>
+        </div>
+      </div>
+      <div id="cost-breakdown" class="cost-breakdown">
+        <!-- per-model rows added by app.js -->
+      </div>
+    </section>
+
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

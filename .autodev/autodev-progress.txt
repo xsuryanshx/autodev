@@ -1,0 +1,18 @@
+AutoDev Progress
+================
+Issue: Feat: Build observability dashboard with real-time UI for tracking agent calls and pipeline execution
+URL: https://github.com/xsuryanshx/autodev/issues/8
+Status: PLANNING
+
+Features:
+- feat-1: core-event-system - Structured event system with typed events, emitter, JSONL persistence [pending]
+- feat-2: pipeline-telemetry - Phase-level metrics collection and aggregation [pending]
+- feat-3: dashboard-server-ui - Web dashboard with HTTP+SSE and real-time UI [pending]
+- feat-4: post-run-analysis - Session analysis with report generation [pending]
+
+Current Phase: Phase 4 - Feature List Created
+Started: 2026-03-20T06:00:00Z
+
+2026-03-20T06:00:00Z [orchestrator] Issue #8 parsed: 4 features, 10 subtasks
+2026-03-20T06:00:01Z [orchestrator] Feature list written to .autodev/feature_list.json
+2026-03-20T06:00:02Z [orchestrator] Dispatching parallel coder agents...
