@@ -421,123 +421,129 @@ If the user is impatient and says "just do it" or similar:
 
 ### Steps
 
-1. **Get current agent-state**
+1. **Read current state**
+   - Read `.autodev/agent-state.json` and `.autodev/feature_list.json`
+   - Read `agents/coder.md` to get the full coder agent instructions
+
+2. **For each feature, construct its prompt.** The prompt MUST include:
+   - The feature ID, name, description, and full subtask list from `feature_list.json`
+   - The relevant files identified in Phase 3
+   - The project conventions (from CLAUDE.md or AGENTS.md if they exist in the target repo)
+   - The test command discovered in Phase 3
+   - The full content of `agents/coder.md` (so the agent knows its role and skills)
+   - Explicit instruction: "You are working in an isolated worktree. Implement the feature, write tests, run the test suite, commit your changes, and report what you did."
+
+3. **Dispatch ALL features in parallel using the Agent tool.**
+
+   Send a SINGLE message containing one Agent tool call per feature. This is critical — sending them in one message makes them run in parallel.
+
+   For each feature, use the Agent tool with these exact parameters:
+   - `description`: "Implement {feat_id}: {short feature name}"
+   - `prompt`: The constructed prompt from step 2
+   - `isolation`: "worktree"
+   - `model`: "sonnet"
+   - `run_in_background`: true
+
+   Example (for 2 features — adapt to however many you have):
    ```
-   Read: .autodev/agent-state.json
-   ```
+   Agent call 1:
+     description: "Implement feat-1: user authentication"
+     prompt: <full prompt for feat-1>
+     isolation: "worktree"
+     model: "sonnet"
+     run_in_background: true
 
-2. **For each feature in feature_list.json:**
-
-   a. **Create feature branch from unified branch**
-      ```
-      Bash: git checkout autodev/issue-{N}
-      Bash: git checkout -b autodev/{feat-id}-{slug}
-      ```
-
-   b. **Prepare agent prompt**
-      Include:
-      ```
-      - Feature description
-      - List of subtasks
-      - Relevant files from Phase 3
-      - Project conventions from CLAUDE.md/AGENTS.md
-      - Current agent-state.json contents
-      - Instructions to:
-        * Implement the feature
-        * Write/update tests
-        * Run tests after implementation
-        * Update feature_list.json with results
-        * Commit changes with descriptive message
-      ```
-
-   c. **Dispatch coder agent**
-      ```
-      Agent:
-        type: coder
-        isolation: worktree
-        prompt: {prepared prompt}
-      ```
-
-   d. **Update agent-state.json**
-      ```json
-      {
-        "dispatched_agents": ["agent-id"],
-        "current_assignments": {
-          "agent-id": {
-            "feature_id": "feat-1",
-            "branch": "autodev/feat-1-descriptive-name"
-          }
-        }
-      }
-      ```
-
-3. **Wait for all agents to complete**
-   ```
-   Monitor agent completion
-   If an agent fails: mark feature as failed, note error
+   Agent call 2:
+     description: "Implement feat-2: API rate limiting"
+     prompt: <full prompt for feat-2>
+     isolation: "worktree"
+     model: "sonnet"
+     run_in_background: true
    ```
 
-4. **After all agents complete:**
-   ```
-   Read: .autodev/feature_list.json
-   Update status for each feature based on agent results
-   ```
+   **Important:** If there is only 1 feature, you can use `run_in_background: false` and wait inline.
+
+4. **Wait for all agents to complete.**
+   Background agents will notify you when they finish. Do NOT poll or sleep.
+   As each agent completes, read its result and note:
+   - What was implemented
+   - Files modified
+   - Test results (pass/fail)
+   - Final commit SHA
+   - Any errors or blockers
+
+5. **Update state files.**
+   - Update `.autodev/feature_list.json`: set each feature's status to `completed` or `failed` based on agent results
+   - Update `.autodev/agent-state.json`: record each agent's files_modified, status, feature, and commit
+   - Append to `.autodev/autodev-progress.txt`: log completion of each feature with timestamp
+   - Commit the state update: `git add .autodev/ && git commit -m "autodev: update state after Phase 5"`
+
+6. **If any feature failed:** Note it in the progress file but continue to Phase 6 with whatever succeeded. Report failures in Phase 8.
 
 ---
 
-## Phase 6: Merge Results
+## Phase 6: Merge Results and Cleanup Worktrees
 
-**Goal:** Combine all feature branches into a unified branch and validate.
+**Goal:** Combine all feature branches into a unified branch, validate, and clean up worktrees.
 
 ### Steps
 
 1. **Read merge strategy**
-   ```
-   Read: skills/autodev/references/merge-strategy.md
-   Follow the protocol defined there
-   ```
+   Read `skills/autodev/references/merge-strategy.md` and follow the protocol.
 
 2. **Checkout unified branch**
-   ```
-   Bash: git checkout autodev/issue-{N}
-   ```
-
-3. **For each completed feature branch:**
-   ```
-   Bash: git merge autodev/{feat-id}-{slug} --no-ff -m "Merge feature: {feat-id}"
+   ```bash
+   git checkout autodev/issue-{N}
    ```
 
-4. **Handle merge conflicts**
+3. **Merge each completed feature branch** (in order of feature ID):
+   ```bash
+   git merge <feature-branch> --no-ff -m "Merge feature: {feat-id} — {feature name}"
    ```
-   If merge conflict occurs:
-   a. Identify conflicting files
-   b. Attempt auto-resolution:
-      - For text conflicts: use git mergetool or manually resolve
-      - For logic conflicts: analyze both sides, pick correct implementation
-   c. If cannot resolve: report to user with conflict details
-   d. After resolution: git add resolved files, git commit
+
+   If a merge conflict occurs:
+   - Read the conflicting files to understand both sides
+   - Resolve the conflict by choosing the correct implementation (or combining both if they touch different parts)
+   - Stage resolved files: `git add <resolved files>`
+   - Complete the merge: `git commit`
+   - If you cannot resolve a conflict, stop and report it to the user with details about both sides
+
+4. **Clean up worktrees.** After ALL merges are complete:
+   ```bash
+   # List all worktrees to find the ones created in Phase 5
+   git worktree list
+
+   # Remove each feature worktree (the paths returned by the agents)
+   git worktree remove <worktree_path> --force
+
+   # Delete feature branches that have been merged
+   git branch -d autodev/{feat-id}-{slug}
    ```
+
+   **Important:** Only remove worktrees for features that were successfully merged. If a feature failed, leave its worktree for debugging.
 
 5. **Run full test suite**
-   ```
-   Bash: run project test suite (pytest, npm test, etc.)
+   Use the test command discovered in Phase 3. Example:
+   ```bash
+   pytest tests/ -v
+   # or: npm test, cargo test, etc.
    ```
 
 6. **If tests fail:**
-   ```
-   a. Analyze test failures
-   b. Dispatch coder agent to fix issues
-      - Use unified branch (no worktree needed for fixes)
-      - Max 2 retries
-   c. Re-run tests after each fix attempt
-   d. If still failing after 2 retries: report to user
-   ```
+   - Analyze the failure output to identify which tests broke and why
+   - Dispatch a single coder Agent (NO worktree, NO background — run inline on the unified branch) to fix the failures:
+     ```
+     Agent tool:
+       description: "Fix test failures on unified branch"
+       prompt: <include test output, failing test names, and relevant code>
+       model: "sonnet"
+     ```
+   - Re-run the full test suite after the fix
+   - Maximum 2 retry cycles. If still failing after 2 retries, proceed to Phase 7 but note the failures
 
-7. **Update progress file**
-   ```
-   Edit: .autodev/autodev-progress.txt
-   Update status: MERGED, note any issues
-   ```
+7. **Update state and commit**
+   - Append to `.autodev/autodev-progress.txt`: "All features merged, worktrees cleaned up, tests {PASSED|FAILED}"
+   - Commit: `git add .autodev/ && git commit -m "autodev: merge complete, worktrees cleaned"`
 
 ---
 
@@ -547,51 +553,47 @@ If the user is impatient and says "just do it" or similar:
 
 ### Steps
 
-1. **Dispatch reviewer agent**
+1. **Gather the diff for review.**
+   ```bash
+   git diff main...autodev/issue-{N} --stat
+   git diff main...autodev/issue-{N}
    ```
-   Agent:
-     type: reviewer
-     prompt: |
-       Review the merged branch: autodev/issue-{N}
+   Save the diff output — you'll include it in the reviewer prompt.
 
-       Check for:
-       - Bugs and logic errors
-       - Code quality and style consistency
-       - Test coverage and quality
-       - Security issues
-       - Performance concerns
+2. **Read the reviewer agent instructions.**
+   Read `agents/reviewer.md` to get the full reviewer role definition and output format.
 
-       Read the changed files and provide:
-       - List of issues found (if any)
-       - Verdict: APPROVED or CHANGES_REQUESTED
+3. **Dispatch the reviewer agent** using the Agent tool:
+   - `description`: "Review autodev/issue-{N} changes"
+   - `prompt`: Include:
+     - The full content of `agents/reviewer.md`
+     - The diff from step 1
+     - The list of features implemented (from `feature_list.json`)
+     - The test results from Phase 6
+     - Instruction: "Review this code and output your verdict in the exact structured format defined in your instructions."
+   - `model`: "opus"
 
-       If CHANGES_REQUESTED:
-       - Be specific about what needs to change
-       - Provide actionable feedback
-   ```
+   Do NOT use `run_in_background` — wait for the reviewer inline.
 
-2. **Process reviewer verdict**
+4. **Parse the reviewer's response.**
+   Look for the `VERDICT:` line in the agent's output:
+   - If `VERDICT: APPROVED` — proceed to Phase 8
+   - If `VERDICT: CHANGES_REQUESTED` — go to step 5
 
-   If `CHANGES_REQUESTED`:
-   ```
-   a. Dispatch coder agent to fix in unified branch
-      - No worktree needed for fixes
-      - Include specific feedback from reviewer
-   b. Re-run reviewer agent (max 3 total cycles)
-   c. If still failing after 3 cycles but verdict is APPROVED: proceed
-   d. If still failing after 3 cycles with CHANGES_REQUESTED: proceed with warning
-   ```
+5. **Handle CHANGES_REQUESTED** (max 3 review cycles total):
 
-   If `APPROVED`:
-   ```
-   Proceed to Phase 8
-   ```
+   a. Extract the `ISSUES:` list from the reviewer's output
+   b. Dispatch a coder Agent to fix the issues (inline, no worktree, on the unified branch):
+      - `description`: "Fix review issues on unified branch"
+      - `prompt`: Include the reviewer's issues list, the affected files, and instruction to fix each issue
+      - `model`: "sonnet"
+   c. Re-run the full test suite to verify the fixes didn't break anything
+   d. Re-dispatch the reviewer agent (repeat from step 3)
+   e. If still `CHANGES_REQUESTED` after 3 total cycles: proceed to Phase 8 with a warning that review issues remain
 
-3. **Update progress file**
-   ```
-   Edit: .autodev/autodev-progress.txt
-   Update status: REVIEW_{VERDICT}
-   ```
+6. **Update state**
+   - Append to `.autodev/autodev-progress.txt`: "Review verdict: {VERDICT}, confidence: {CONFIDENCE}"
+   - Commit: `git add .autodev/ && git commit -m "autodev: review {VERDICT}"`
 
 ---
 
