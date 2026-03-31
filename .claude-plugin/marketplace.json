@@ -1,0 +1,17 @@
+{
+  "name": "autodev-marketplace",
+  "owner": {
+    "name": "Suryansh Rawat"
+  },
+  "metadata": {
+    "description": "AutoDev autonomous coding harness plugin for Claude Code"
+  },
+  "plugins": [
+    {
+      "name": "autodev",
+      "source": ".",
+      "description": "Autonomous coding harness: takes a GitHub issue or feature description and implements it end-to-end using parallel agents in isolated worktrees",
+      "version": "1.0.0"
+    }
+  ]
+}

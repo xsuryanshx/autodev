@@ -161,42 +161,28 @@ autodev/
 - GitHub CLI (`gh`) authenticated: `gh auth login`
 - Git configured with push access to your fork of the target repository
 
-### Step 1: Clone AutoDev
+### Step 1: Add AutoDev as a Plugin Marketplace
+
+**Option A — From GitHub (recommended):**
+
+```bash
+claude plugin marketplace add https://github.com/xsuryanshx/autodev
+```
+
+**Option B — From a local clone:**
 
 ```bash
 git clone https://github.com/xsuryanshx/autodev.git ~/autodev
+claude plugin marketplace add ~/autodev
 ```
 
-### Step 2: Install as a Claude Code Plugin
-
-**Option A — Symlink (recommended for daily use):**
+### Step 2: Install the Plugin
 
 ```bash
-# Create the plugins directory if it doesn't exist
-mkdir -p ~/.claude/plugins/cache/local
-
-# Symlink autodev into the plugins directory
-ln -sfn ~/autodev ~/.claude/plugins/cache/local/autodev
+claude plugin install autodev@autodev-marketplace
 ```
 
-Then add to your Claude Code settings (`~/.claude/settings.json`):
-```json
-{
-  "enabledPlugins": {
-    "autodev@local": true
-  }
-}
-```
-
-Restart Claude Code or run `/reload-plugins` to pick up the plugin.
-
-**Option B — Direct load (for development/testing):**
-
-```bash
-claude --plugin-dir ~/autodev
-```
-
-This loads AutoDev for a single session without permanent installation.
+This installs AutoDev to your user scope — it's available in every project.
 
 ### Step 3: Verify Installation
 
@@ -209,7 +195,15 @@ claude
 /autodev --help
 ```
 
-If `/autodev` doesn't appear, check that the symlink points to the directory containing `.claude-plugin/plugin.json`.
+**Alternative — Direct load (for development/testing):**
+
+If you're developing AutoDev itself, load it directly without marketplace registration:
+
+```bash
+claude --plugin-dir ~/autodev
+```
+
+This loads AutoDev for a single session only.
 
 ### Step 4: Enable Auto Mode (Recommended)
 
