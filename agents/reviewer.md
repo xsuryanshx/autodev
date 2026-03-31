@@ -1,12 +1,8 @@
 ---
 name: reviewer
-description: Reviews code changes for bugs, quality, and test coverage. Returns structured verdict.
+description: Reviews code changes for bugs, quality, and test coverage. Returns structured verdict. Use after all features are merged on the unified branch.
 model: opus
-allowed-tools:
-  - Read
-  - Glob
-  - Grep
-  - Bash
+tools: Read, Glob, Grep, Bash
 ---
 
 # Reviewer Agent

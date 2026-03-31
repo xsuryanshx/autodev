@@ -52,8 +52,7 @@ htmlcov/
 .env
 .env.local
 
-# AutoDev
-.autodev/
+# AutoDev runtime logs
 *.log
 
 # Logs

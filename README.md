@@ -155,25 +155,139 @@ autodev/
 
 ## Installation
 
-AutoDev is installed as a Claude Code plugin:
-
-```bash
-# Clone the repository
-git clone https://github.com/suryanshrawat/autodev.git
-
-# Navigate to the plugin directory
-cd autodev
-
-# The plugin is auto-discovered by Claude Code
-# Run the command:
-/autodev https://github.com/owner/repo/issues/123
-```
-
-### Requirements
+### Prerequisites
 
 - [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) installed and authenticated
 - GitHub CLI (`gh`) authenticated: `gh auth login`
-- A target repository with write access (for pushing to fork)
+- Git configured with push access to your fork of the target repository
+
+### Step 1: Add AutoDev as a Plugin Marketplace
+
+**Option A — From GitHub (recommended):**
+
+```bash
+claude plugin marketplace add https://github.com/xsuryanshx/autodev
+```
+
+**Option B — From a local clone:**
+
+```bash
+git clone https://github.com/xsuryanshx/autodev.git ~/autodev
+claude plugin marketplace add ~/autodev
+```
+
+### Step 2: Install the Plugin
+
+```bash
+claude plugin install autodev@autodev-marketplace
+```
+
+This installs AutoDev to your user scope — it's available in every project.
+
+### Step 3: Verify Installation
+
+```bash
+# Open Claude Code in any project
+cd ~/projects/my-project
+claude
+
+# Type /autodev — it should autocomplete
+/autodev --help
+```
+
+**Alternative — Direct load (for development/testing):**
+
+If you're developing AutoDev itself, load it directly without marketplace registration:
+
+```bash
+claude --plugin-dir ~/autodev
+```
+
+This loads AutoDev for a single session only.
+
+### Step 4: Enable Auto Mode (Recommended)
+
+AutoDev runs best with **auto mode**, which lets the pipeline execute without permission prompts:
+
+```bash
+# Start with auto mode enabled
+claude --permission-mode auto
+
+# Or add it to the Shift+Tab cycle so you can toggle it
+claude --enable-auto-mode
+```
+
+Auto mode requires a Team, Enterprise, or API plan with Sonnet 4.6 or Opus 4.6. A background classifier reviews each action for safety — it's not the same as bypassing permissions entirely.
+
+Without auto mode, you'll need to manually approve permission prompts during the pipeline (especially during agent dispatch and test execution).
+
+---
+
+## Using AutoDev on Any Repository
+
+AutoDev works on **whatever repository you're currently in**. It explores the codebase in your current working directory, creates worktrees from it, and pushes branches to its origin.
+
+### Using it on your own project
+
+```bash
+# 1. cd into your project
+cd ~/projects/my-cool-app
+
+# 2. Start Claude Code (if using Option A, it loads automatically)
+claude
+
+# 3. Run autodev with a GitHub issue or feature description
+/autodev https://github.com/you/my-cool-app/issues/42
+# or
+/autodev Add dark mode support to the settings page
+```
+
+### Using it on a different repo than where AutoDev is installed
+
+AutoDev is a plugin — it's installed once and available everywhere. You do NOT run it from inside the autodev repo itself.
+
+```bash
+# Wrong — this would try to implement features on the autodev plugin itself
+cd ~/autodev
+/autodev https://github.com/other/repo/issues/5
+
+# Correct — cd to the target repo first
+cd ~/projects/other-repo
+claude
+/autodev https://github.com/other/repo/issues/5
+```
+
+### Cross-repo workflow example
+
+```bash
+# Say you maintain 3 projects and have issues to fix in each:
+
+# Project 1
+cd ~/projects/api-server
+claude
+/autodev https://github.com/you/api-server/issues/15
+# AutoDev explores api-server/, creates worktrees in api-server/, pushes to api-server fork
+
+# Project 2
+cd ~/projects/frontend
+claude
+/autodev Add responsive sidebar navigation
+# AutoDev explores frontend/, creates worktrees in frontend/
+
+# Project 3
+cd ~/projects/data-pipeline
+claude
+/autodev https://github.com/you/data-pipeline/issues/8
+```
+
+### What AutoDev needs from your repo
+
+AutoDev works best when your repository has:
+- A test suite it can discover and run (pytest, npm test, cargo test, etc.)
+- A `CLAUDE.md` or `README.md` describing conventions (optional but helps)
+- A remote origin it can push branches to
+
+If your repo has no tests, AutoDev will still implement features but cannot verify correctness automatically.
 
 ---
 
