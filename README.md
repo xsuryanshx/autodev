@@ -211,6 +211,22 @@ claude
 
 If `/autodev` doesn't appear, check that the symlink points to the directory containing `.claude-plugin/plugin.json`.
 
+### Step 4: Enable Auto Mode (Recommended)
+
+AutoDev runs best with **auto mode**, which lets the pipeline execute without permission prompts:
+
+```bash
+# Start with auto mode enabled
+claude --permission-mode auto
+
+# Or add it to the Shift+Tab cycle so you can toggle it
+claude --enable-auto-mode
+```
+
+Auto mode requires a Team, Enterprise, or API plan with Sonnet 4.6 or Opus 4.6. A background classifier reviews each action for safety — it's not the same as bypassing permissions entirely.
+
+Without auto mode, you'll need to manually approve permission prompts during the pipeline (especially during agent dispatch and test execution).
+
 ---
 
 ## Using AutoDev on Any Repository

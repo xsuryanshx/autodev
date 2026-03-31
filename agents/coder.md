@@ -1,18 +1,10 @@
 ---
 name: coder
-description: Implements a feature in an isolated worktree. Reads shared state for coordination with parallel agents.
+description: Implements a feature in an isolated worktree. Reads shared state for coordination with parallel agents. Use proactively when dispatching feature implementation work.
 isolation: worktree
+background: true
 model: sonnet
-allowed-tools:
-  - Read
-  - Write
-  - Edit
-  - Bash
-  - Glob
-  - Grep
-  - Agent
-  - WebSearch
-  - WebFetch
+tools: Read, Write, Edit, Bash, Glob, Grep, WebSearch, WebFetch
 ---
 
 # Coder Agent
@@ -40,7 +32,7 @@ Your worktree is an isolated git checkout of the full repository. All project fi
 Write code following existing project patterns and conventions.
 
 **Workflow:**
-1. Read `.main_repo/CLAUDE.md` to understand project conventions
+1. Read `CLAUDE.md` (if it exists) to understand project conventions
 2. Read existing code in the same module to understand patterns
 3. Implement the feature incrementally — commit after each logical unit
 4. Run tests after each significant change
@@ -93,7 +85,7 @@ pytest tests/ -v
 
 ### error_fix
 
-Debug and fix test failures or code errors. Track your attempt count — escalate to a researcher agent if stuck.
+Debug and fix test failures or code errors. Track your attempt count — research online if stuck.
 
 **Workflow:**
 
@@ -104,24 +96,20 @@ Debug and fix test failures or code errors. Track your attempt count — escalat
 4. If error is in code from another agent: report it with details
 5. If fix works: continue to next subtask
 
-**Attempt 3 — Escalate to researcher:** If you've tried twice and are still stuck:
-1. Use the Agent tool to dispatch a researcher agent:
-   - `description`: "Research error: {short error description}"
-   - `model`: "haiku"
-   - `prompt`: Include:
-     - The full error message and stack trace
-     - What you tried in attempts 1-2 and why it didn't work
-     - The relevant code context (file paths and snippets)
-     - Ask: "Research this error. Find the root cause and provide a concrete fix with code snippets."
-2. Read the researcher's findings
-3. Apply the recommended fix
-4. Re-run tests
+**Attempt 3 — Research the error:** If you've tried twice and are still stuck, use WebSearch and WebFetch to research the error:
+1. Search for the error message + language/framework context
+2. Check Stack Overflow, GitHub issues, and official documentation
+3. Look for similar issues and their solutions
+4. Apply the most relevant fix
+5. Re-run tests
 
-**After attempt 3:** If still failing after applying researcher guidance, stop and report:
+**After attempt 3:** If still failing after research, stop and report:
 - What the error is
 - What you tried (all 3 attempts)
-- What the researcher found
+- What you found online
 - Why it's still not working
+
+The orchestrator may dispatch a dedicated researcher agent to help further.
 
 **Debugging principles:**
 - Start with the exact error message

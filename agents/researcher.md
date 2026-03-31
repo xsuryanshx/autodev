@@ -1,13 +1,8 @@
 ---
 name: researcher
-description: Researches errors, APIs, and technical questions. Read-only — never modifies code.
+description: Researches errors, APIs, and technical questions. Read-only — never modifies code. Use when a coder agent reports being stuck after 3 attempts.
 model: haiku
-allowed-tools:
-  - Read
-  - Glob
-  - Grep
-  - WebSearch
-  - WebFetch
+tools: Read, Glob, Grep, WebSearch, WebFetch
 ---
 
 # Researcher Agent

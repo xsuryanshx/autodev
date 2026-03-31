@@ -36,6 +36,17 @@ Critical rules:
 - Track state in `.autodev/` directory
 - **ASK QUESTIONS FIRST** — understand the issue deeply before implementing
 
+### Recommended: Auto Mode
+
+For uninterrupted execution, run Claude Code with auto mode:
+```bash
+claude --permission-mode auto
+# or enable it in the Shift+Tab cycle:
+claude --enable-auto-mode
+```
+
+Auto mode uses a background classifier to approve/deny actions without permission prompts. It requires a Team, Enterprise, or API plan with Sonnet 4.6 or Opus 4.6. Without auto mode, you'll need to approve permission prompts manually during the pipeline.
+
 ---
 
 ## Phase 0: Requirements Clarification
@@ -438,30 +449,31 @@ If the user is impatient and says "just do it" or similar:
    Send a SINGLE message containing one Agent tool call per feature. This is critical — sending them in one message makes them run in parallel.
 
    For each feature, use the Agent tool with these exact parameters:
+   - `subagent_type`: "coder"
    - `description`: "Implement {feat_id}: {short feature name}"
    - `prompt`: The constructed prompt from step 2
-   - `isolation`: "worktree"
-   - `model`: "sonnet"
    - `run_in_background`: true
+
+   The coder subagent has `isolation: worktree` and `model: sonnet` in its frontmatter, so Claude Code automatically creates an isolated worktree and uses Sonnet. You do NOT need to pass these parameters.
 
    Example (for 2 features — adapt to however many you have):
    ```
    Agent call 1:
+     subagent_type: "coder"
      description: "Implement feat-1: user authentication"
      prompt: <full prompt for feat-1>
-     isolation: "worktree"
-     model: "sonnet"
      run_in_background: true
 
    Agent call 2:
+     subagent_type: "coder"
      description: "Implement feat-2: API rate limiting"
      prompt: <full prompt for feat-2>
-     isolation: "worktree"
-     model: "sonnet"
      run_in_background: true
    ```
 
-   **Important:** If there is only 1 feature, you can use `run_in_background: false` and wait inline.
+   **Important:** If there is only 1 feature, you can omit `run_in_background` and wait inline.
+
+   **Note:** Subagents cannot spawn other subagents. If a coder gets stuck, it will use WebSearch/WebFetch to research the error itself. If it still fails, you (the orchestrator) should dispatch a researcher subagent in step 6 below.
 
 4. **Wait for all agents to complete.**
    Background agents will notify you when they finish. Do NOT poll or sleep.
@@ -478,7 +490,14 @@ If the user is impatient and says "just do it" or similar:
    - Append to `.autodev/autodev-progress.txt`: log completion of each feature with timestamp
    - Commit the state update: `git add .autodev/ && git commit -m "autodev: update state after Phase 5"`
 
-6. **If any feature failed:** Note it in the progress file but continue to Phase 6 with whatever succeeded. Report failures in Phase 8.
+6. **If a coder reported being stuck on an error**, dispatch a researcher subagent to help:
+   - Use the Agent tool with `subagent_type: "researcher"`
+   - Include the error details, stack trace, and what the coder tried
+   - Read the researcher's findings
+   - Dispatch a new coder subagent (with worktree) to apply the fix
+   - Maximum 1 researcher escalation per feature
+
+7. **If any feature still failed after researcher help:** Note it in the progress file but continue to Phase 6 with whatever succeeded. Report failures in Phase 8.
 
 ---
 
@@ -571,16 +590,15 @@ If the user is impatient and says "just do it" or similar:
    Read `agents/reviewer.md` to get the full reviewer role definition and output format.
 
 3. **Dispatch the reviewer agent** using the Agent tool:
+   - `subagent_type`: "reviewer"
    - `description`: "Review autodev/issue-{N} changes"
    - `prompt`: Include:
-     - The full content of `agents/reviewer.md`
      - The diff from step 1
      - The list of features implemented (from `feature_list.json`)
      - The test results from Phase 6
      - Instruction: "Review this code and output your verdict in the exact structured format defined in your instructions."
-   - `model`: "opus"
 
-   Do NOT use `run_in_background` — wait for the reviewer inline.
+   The reviewer subagent has `model: opus` in its frontmatter. Do NOT use `run_in_background` — wait for the reviewer inline.
 
 4. **Parse the reviewer's response.**
    Look for the `VERDICT:` line in the agent's output:
