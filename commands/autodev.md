@@ -508,7 +508,7 @@ If the user is impatient and says "just do it" or similar:
    - Complete the merge: `git commit`
    - If you cannot resolve a conflict, stop and report it to the user with details about both sides
 
-4. **Clean up worktrees.** After ALL merges are complete:
+4. **Clean up worktrees and branches.** After ALL merges are complete:
    ```bash
    # List all worktrees to find the ones created in Phase 5
    git worktree list
@@ -516,8 +516,15 @@ If the user is impatient and says "just do it" or similar:
    # Remove each feature worktree (the paths returned by the agents)
    git worktree remove <worktree_path> --force
 
-   # Delete feature branches that have been merged
+   # Delete local feature branches that have been merged
    git branch -d autodev/{feat-id}-{slug}
+
+   # Delete remote feature branches (they were only needed for worktree creation)
+   git push origin --delete autodev/{feat-id}-{slug}
+
+   # Also clean up any worktree-agent-* branches left by Claude Code's isolation
+   git branch | grep worktree-agent | xargs git branch -D
+   git worktree prune
    ```
 
    **Important:** Only remove worktrees for features that were successfully merged. If a feature failed, leave its worktree for debugging.
@@ -665,6 +672,36 @@ If the user is impatient and says "just do it" or similar:
 
 ---
 
+## Cleanup on Failure
+
+If the pipeline fails or is interrupted at ANY phase after Phase 5, you MUST clean up before stopping:
+
+```bash
+# 1. Remove all worktrees created by this run
+git worktree list
+# For each worktree that is NOT the main repo:
+git worktree remove <path> --force
+
+# 2. Prune stale worktree references
+git worktree prune
+
+# 3. Delete orphaned worktree-agent-* branches (created by Claude Code isolation)
+git branch | grep worktree-agent | xargs git branch -D 2>/dev/null
+
+# 4. Delete feature branches that were never merged
+git branch | grep autodev/feat | xargs git branch -D 2>/dev/null
+```
+
+This cleanup runs even if:
+- An agent failed and Phase 6 merge was skipped
+- The reviewer rejected changes and you're stopping
+- The user cancelled the run
+- Any unexpected error occurred
+
+**Never leave stale worktrees behind.** They waste disk space and pollute the branch list.
+
+---
+
 ## Critical Reminders
 
 1. **NEVER auto-create PRs** — always push to fork and let user review
@@ -674,3 +711,4 @@ If the user is impatient and says "just do it" or similar:
 5. **Reproduce bugs** — verify before fixing
 6. **Test thoroughly** — run full suite before reporting
 7. **Be transparent** — report what was done, what failed, what needs attention
+8. **Always clean up worktrees** — run cleanup on success AND failure
