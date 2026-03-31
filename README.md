@@ -155,39 +155,129 @@ autodev/
 
 ## Installation
 
-### For Your Own Use (Local Plugin)
-
-AutoDev runs as a Claude Code plugin. To use it locally:
-
-```bash
-# 1. Create a symlink in the plugins directory
-mkdir -p ~/.claude/plugins/cache/local
-ln -sfn /path/to/autodev ~/.claude/plugins/cache/local/autodev
-
-# 2. Enable the plugin in settings.json (~/.claude/settings.json)
-# Add to "enabledPlugins":
-"autodev@local": true
-
-# 3. Reload plugins
-/reload-plugins
-
-# 4. Run the command from any project
-cd ~/projects/my-project
-/autodev https://github.com/owner/repo/issues/123
-```
-
-**For development/testing** — use the `--plugin-dir` flag to load the plugin directly:
-
-```bash
-claude --plugin-dir /path/to/autodev
-/autodev Add feature description
-```
-
-### Requirements
+### Prerequisites
 
 - [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) installed and authenticated
 - GitHub CLI (`gh`) authenticated: `gh auth login`
-- A target repository with write access (for pushing to fork)
+- Git configured with push access to your fork of the target repository
+
+### Step 1: Clone AutoDev
+
+```bash
+git clone https://github.com/xsuryanshx/autodev.git ~/autodev
+```
+
+### Step 2: Install as a Claude Code Plugin
+
+**Option A — Symlink (recommended for daily use):**
+
+```bash
+# Create the plugins directory if it doesn't exist
+mkdir -p ~/.claude/plugins/cache/local
+
+# Symlink autodev into the plugins directory
+ln -sfn ~/autodev ~/.claude/plugins/cache/local/autodev
+```
+
+Then add to your Claude Code settings (`~/.claude/settings.json`):
+```json
+{
+  "enabledPlugins": {
+    "autodev@local": true
+  }
+}
+```
+
+Restart Claude Code or run `/reload-plugins` to pick up the plugin.
+
+**Option B — Direct load (for development/testing):**
+
+```bash
+claude --plugin-dir ~/autodev
+```
+
+This loads AutoDev for a single session without permanent installation.
+
+### Step 3: Verify Installation
+
+```bash
+# Open Claude Code in any project
+cd ~/projects/my-project
+claude
+
+# Type /autodev — it should autocomplete
+/autodev --help
+```
+
+If `/autodev` doesn't appear, check that the symlink points to the directory containing `.claude-plugin/plugin.json`.
+
+---
+
+## Using AutoDev on Any Repository
+
+AutoDev works on **whatever repository you're currently in**. It explores the codebase in your current working directory, creates worktrees from it, and pushes branches to its origin.
+
+### Using it on your own project
+
+```bash
+# 1. cd into your project
+cd ~/projects/my-cool-app
+
+# 2. Start Claude Code (if using Option A, it loads automatically)
+claude
+
+# 3. Run autodev with a GitHub issue or feature description
+/autodev https://github.com/you/my-cool-app/issues/42
+# or
+/autodev Add dark mode support to the settings page
+```
+
+### Using it on a different repo than where AutoDev is installed
+
+AutoDev is a plugin — it's installed once and available everywhere. You do NOT run it from inside the autodev repo itself.
+
+```bash
+# Wrong — this would try to implement features on the autodev plugin itself
+cd ~/autodev
+/autodev https://github.com/other/repo/issues/5
+
+# Correct — cd to the target repo first
+cd ~/projects/other-repo
+claude
+/autodev https://github.com/other/repo/issues/5
+```
+
+### Cross-repo workflow example
+
+```bash
+# Say you maintain 3 projects and have issues to fix in each:
+
+# Project 1
+cd ~/projects/api-server
+claude
+/autodev https://github.com/you/api-server/issues/15
+# AutoDev explores api-server/, creates worktrees in api-server/, pushes to api-server fork
+
+# Project 2
+cd ~/projects/frontend
+claude
+/autodev Add responsive sidebar navigation
+# AutoDev explores frontend/, creates worktrees in frontend/
+
+# Project 3
+cd ~/projects/data-pipeline
+claude
+/autodev https://github.com/you/data-pipeline/issues/8
+```
+
+### What AutoDev needs from your repo
+
+AutoDev works best when your repository has:
+- A test suite it can discover and run (pytest, npm test, cargo test, etc.)
+- A `CLAUDE.md` or `README.md` describing conventions (optional but helps)
+- A remote origin it can push branches to
+
+If your repo has no tests, AutoDev will still implement features but cannot verify correctness automatically.
 
 ---
 
